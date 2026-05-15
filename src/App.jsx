@@ -991,8 +991,7 @@ function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
               const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);
               return s2+calcPay(s,att).total;
             },0)));
-            const msg=lines.join("
-");
+            const msg=lines.join("\n");
             if(navigator.clipboard)navigator.clipboard.writeText(msg).then(()=>alert("คัดลอกแล้ว!"));
             else{const ta=document.createElement("textarea");ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);alert("คัดลอกแล้ว!");}
           }} style={{...S.btn(),width:"100%",padding:11,fontSize:14}}>📋 สรุปเงินเดือน (Copy)</button>
