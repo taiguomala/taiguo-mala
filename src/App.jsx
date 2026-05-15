@@ -822,98 +822,266 @@ function QRCodeDisplay({staff,staffId,onCheckIn,onCheckOut}){
 }
 
 
+function QRDisplay({staff,staffId,onIn,onOut}){
+  const s=staff.find(x=>x.id===staffId);
+  if(!s)return null;
+  const url=window.location.origin+window.location.pathname+"?sid="+s.id;
+  const qr="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data="+encodeURIComponent(url);
+  return(
+    <div style={{textAlign:"center",padding:12}}>
+      <div style={{background:"#fff",padding:12,borderRadius:14,border:"2px solid "+T.orange,display:"inline-block"}}>
+        <img src={qr} alt="QR" style={{width:150,height:150,display:"block"}} />
+        <div style={{fontWeight:800,fontSize:15,marginTop:6}}>{s.name}</div>
+        <div style={{color:T.textSm,fontSize:11}}>สแกนเพื่อเช็คเวลา</div>
+      </div>
+      <div style={{marginTop:8,fontSize:11,color:T.textSm,wordBreak:"break-all",padding:"0 8px"}}>{url}</div>
+      <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:8,flexWrap:"wrap"}}>
+        <button onClick={()=>window.open(url,"_blank")} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>🔗 เปิด</button>
+        <button onClick={()=>window.print()} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>🖨 พิมพ์</button>
+        <button onClick={()=>onIn(staffId)} style={{...S.btn(T.green),fontSize:12,padding:"5px 10px"}}>📥 บันทึกเข้า</button>
+        <button onClick={()=>onOut(staffId)} style={{...S.btn(T.red),fontSize:12,padding:"5px 10px"}}>📤 บันทึกออก</button>
+      </div>
+    </div>
+  );
+}
+
 function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
-  const[tab,setTab]=useState("checkin");const[selStaff,setSelStaff]=useState("");const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));const[editHrId,setEditHrId]=useState(null);const[hrEdit,setHrEdit]=useState({});const[editOtId,setEditOtId]=useState(null);const[otVal,setOtVal]=useState("");
+  const[tab,setTab]=useState("checkin");
+  const[selStaff,setSelStaff]=useState("");
+  const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));
+  const[editHrId,setEditHrId]=useState(null);
+  const[hrEdit,setHrEdit]=useState({});
+  const[editOtId,setEditOtId]=useState(null);
+  const[otVal,setOtVal]=useState("");
   const workers=staff.filter(s=>s.role==="staff"&&s.active);
   const nowFn=()=>new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
-  const checkIn=sid=>{if(attendance.find(a=>a.staffId===sid&&a.date===today()&&!a.checkOut)){alert("เช็คอินแล้ว");return;}setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date:today(),checkIn:nowFn(),checkOut:"",note:""}]);};
+  const checkIn=sid=>{
+    if(attendance.find(a=>a.staffId===sid&&a.date===today()&&!a.checkOut)){alert("เช็คอินแล้ว");return;}
+    setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date:today(),checkIn:nowFn(),checkOut:"",note:""}]);
+  };
   const checkOut=sid=>setAttendance(p=>p.map(a=>a.staffId===sid&&a.date===today()&&!a.checkOut?{...a,checkOut:nowFn()}:a));
-  const calcPay=(s,att)=>{const hr=s.hr||{};const wage=hr.wage||0;const wt=hr.wageType||"day";let base=wt==="month"?wage:att.filter(a=>a.checkIn).length*wage;const otp=hr.otPerHour||50;const ot=att.reduce((sum,a)=>{const ov=a.otOverride;return sum+(ov!==undefined&&ov!==null?ov:calcOT(a.checkOut,otp).p);},0);let bonus=0;if(hr.bonusPct>0){const sales=cf.filter(e=>e.flow==="in"&&e.staffId===s.id&&e.date.startsWith(salaryMonth)).reduce((a,b)=>a+b.amount,0);bonus=sales*(hr.bonusPct/100);}return{base,ot,bonus,total:base+ot+bonus};};
-nction HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
-  const[tab,setTab]=useState("checkin");const[selStaff,setSelStaff]=useState("");const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));const[editHrId,setEditHrId]=useState(null);const[hrEdit,setHrEdit]=useState({});const[editOtId,setEditOtId]=useState(null);const[otVal,setOtVal]=useState("");
-  const workers=staff.filter(s=>s.role==="staff"&&s.active);
-  const nowFn=()=>new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
-  const checkIn=sid=>{if(attendance.find(a=>a.staffId===sid&&a.date===today()&&!a.checkOut)){alert("เช็คอินแล้ว");return;}setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date:today(),checkIn:nowFn(),checkOut:"",note:""}]);};
-  const checkOut=sid=>setAttendance(p=>p.map(a=>a.staffId===sid&&a.date===today()&&!a.checkOut?{...a,checkOut:nowFn()}:a));
-  const calcPay=(s,att)=>{const hr=s.hr||{};const wage=hr.wage||0;const wt=hr.wageType||"day";let base=wt==="month"?wage:att.filter(a=>a.checkIn).length*wage;const otp=hr.otPerHour||50;const ot=att.reduce((sum,a)=>{const ov=a.otOverride;return sum+(ov!==undefined&&ov!==null?ov:calcOT(a.checkOut,otp).p);},0);let bonus=0;if(hr.bonusPct>0){const sales=cf.filter(e=>e.flow==="in"&&e.staffId===s.id&&e.date.startsWith(salaryMonth)).reduce((a,b)=>a+b.amount,0);bonus=sales*(hr.bonusPct/100);}return{base,ot,bonus,total:base+ot+bonus};};
+  const calcPay=(s,att)=>{
+    const hr=s.hr||{};const wage=hr.wage||0;const wt=hr.wageType||"day";
+    const base=wt==="month"?wage:att.filter(a=>a.checkIn).length*wage;
+    const otp=hr.otPerHour||50;
+    const ot=att.reduce((sum,a)=>{const ov=a.otOverride;return sum+(ov!==undefined&&ov!==null?ov:calcOT(a.checkOut,otp).p);},0);
+    let bonus=0;
+    if(hr.bonusPct>0){
+      const sales=cf.filter(e=>e.flow==="in"&&e.staffId===s.id&&e.date.startsWith(salaryMonth)).reduce((a,b)=>a+b.amount,0);
+      bonus=sales*(hr.bonusPct/100);
+    }
+    return{base,ot,bonus,total:base+ot+bonus};
+  };
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Hdr title="👥 HR & เงินเดือน" action={<div style={{display:"flex",gap:6}}>
-        <IEBtn onExport={()=>{if(tab==="salary")exportXlsx(workers.map(s=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);const{base,ot,bonus,total}=calcPay(s,att);return{ชื่อ:s.name,วันทำงาน:att.length,ค่าจ้าง:Math.round(base),OT:Math.round(ot),โบนัส:Math.round(bonus),รวม:Math.round(total)};}), "เงินเดือน","salary");else exportXlsx(attendance.map(a=>{const s=workers.find(x=>x.id===a.staffId);return{ชื่อ:s?.name||a.staffId,วันที่:a.date,เข้า:a.checkIn,ออก:a.checkOut||"-",หมายเหตุ:a.note||""};}), "attendance","attendance");}} onImport={rows=>{const m=rows.map(r=>{const s=workers.find(x=>x.name===r["ชื่อ"]);return{id:Date.now()+Math.random(),staffId:s?.id||"",date:r["วันที่"]||today(),checkIn:r["เข้า"]||"",checkOut:r["ออก"]||"",note:""};}).filter(r=>r.staffId);setAttendance(p=>[...p,...m]);alert(`นำเข้า ${m.length} รายการ`);}} />
-        {user.role==="owner"&&tab==="checkin"&&<ClearBtn label="ประวัติการเข้างาน" onClear={()=>setAttendance([])} />}
-      </div>} />
+      <Hdr title="👥 HR & เงินเดือน" action={
+        <div style={{display:"flex",gap:6}}>
+          <IEBtn
+            onExport={()=>{
+              if(tab==="salary"){
+                exportXlsx(workers.map(s=>{
+                  const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);
+                  const{base,ot,bonus,total}=calcPay(s,att);
+                  return{ชื่อ:s.name,วันทำงาน:att.length,ค่าจ้าง:Math.round(base),OT:Math.round(ot),โบนัส:Math.round(bonus),รวม:Math.round(total)};
+                }),"เงินเดือน","salary");
+              } else {
+                exportXlsx(attendance.map(a=>{
+                  const s=workers.find(x=>x.id===a.staffId);
+                  return{ชื่อ:s?.name||a.staffId,วันที่:a.date,เข้า:a.checkIn,ออก:a.checkOut||"-",หมายเหตุ:a.note||""};
+                }),"attendance","attendance");
+              }
+            }}
+            onImport={rows=>{
+              const m=rows.map(r=>{
+                const s=workers.find(x=>x.name===r["ชื่อ"]);
+                return{id:Date.now()+Math.random(),staffId:s?.id||"",date:r["วันที่"]||today(),checkIn:r["เข้า"]||"",checkOut:r["ออก"]||"",note:""};
+              }).filter(r=>r.staffId);
+              setAttendance(p=>[...p,...m]);
+              alert("นำเข้า "+m.length+" รายการ");
+            }}
+          />
+          {tab==="checkin"&&<ClearBtn label="ประวัติการเข้างาน" onClear={()=>setAttendance([])} />}
+        </div>
+      } />
       <Tabs tabs={[["checkin","📲 เช็คเข้า-ออก"],["salary","💰 เงินเดือน"],["config","⚙️ ตั้งค่า"]]} active={tab} onChange={setTab} />
+
       {tab==="checkin"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {shopLat&&shopLng?<Card style={{background:T.greenLt,borderColor:T.green+"44"}}><div style={{color:T.green,fontWeight:700,fontSize:14}}>📍 ตั้งค่าพิกัดร้านแล้ว</div><div style={{color:T.textSm,fontSize:13}}>พนักงานต้องอยู่ในรัศมีร้านถึงจะเช็คเวลาได้</div></Card>
-        :<Card style={{background:T.yellowLt,borderColor:T.yellow+"44"}}><div style={{color:T.yellow,fontWeight:700,fontSize:14}}>⚠️ ยังไม่ได้ตั้งพิกัดร้าน</div><div style={{color:T.textSm,fontSize:13}}>ไปที่ Settings → ร้าน เพื่อตั้งค่าพิกัด</div></Card>}
-        <Card><div style={{fontWeight:700,fontSize:14,marginBottom:7}}>🖨 QR Code พนักงาน</div>
-          <select value={selStaff} onChange={e=>setSelStaff(e.target.value)} style={{...S.inp,fontSize:15,height:44}}><option value="">— เลือกพนักงาน —</option>{workers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        {shopLat&&shopLng
+          ?<Card style={{background:T.greenLt,borderColor:T.green+"44"}}><div style={{color:T.green,fontWeight:700,fontSize:14}}>📍 ตั้งค่าพิกัดร้านแล้ว</div><div style={{color:T.textSm,fontSize:13}}>พนักงานต้องอยู่ในรัศมีร้านถึงจะเช็คเวลาได้</div></Card>
+          :<Card style={{background:T.yellowLt,borderColor:T.yellow+"44"}}><div style={{color:T.yellow,fontWeight:700,fontSize:14}}>⚠️ ยังไม่ได้ตั้งพิกัดร้าน</div><div style={{color:T.textSm,fontSize:13}}>ไปที่ Settings → ร้าน เพื่อตั้งค่าพิกัด</div></Card>
+        }
+        <Card>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:7}}>🖨 QR Code พนักงาน</div>
+          <select value={selStaff} onChange={e=>setSelStaff(e.target.value)} style={{...S.inp,fontSize:15,height:44}}>
+            <option value="">— เลือกพนักงาน —</option>
+            {workers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </Card>
-        {selStaff&&<QRCodeDisplay staff={staff} staffId={selStaff} onCheckIn={checkIn} onCheckOut={checkOut} />}
-        <Card><div style={{fontWeight:700,fontSize:14,marginBottom:9}}>📋 เข้างานวันนี้</div>
-          {workers.map(s=>{const att=attendance.find(a=>a.staffId===s.id&&a.date===today());const hr2=s.hr||{};const{m:otMins,p:otPay}=att?.checkOut?calcOT(att.checkOut,hr2.otPerHour||50):{m:0,p:0};const finalOt=att?.otOverride!==undefined&&att?.otOverride!==null?att.otOverride:otPay;const editOt=editOtId===s.id;
-            return(<div key={s.id} style={{padding:"9px 0",borderBottom:`1px solid ${T.bg}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontWeight:600,fontSize:14}}>{s.name}</div>
-                  <div style={{color:T.textSm,fontSize:12}}>{att?.checkIn?`เข้า ${att.checkIn}`:"ยังไม่เช็คอิน"}{att?.checkOut?` • ออก ${att.checkOut}`:att?.checkIn?" • ยังอยู่":""}</div>
-                  {att?.checkOut&&otMins>0&&<div style={{fontSize:12,marginTop:2}}>
-                    <span style={{color:T.orange,fontWeight:600}}>⏰ OT {otMins} นาที = </span>
-                    {editOt?(<span style={{display:"inline-flex",alignItems:"center",gap:4}}>
-                      <input type="number" value={otVal} onChange={e=>setOtVal(e.target.value)} style={{width:68,padding:"2px 5px",border:`1px solid ${T.orange}`,borderRadius:6,fontSize:12}} autoFocus />
-                      <button onClick={()=>{setAttendance(p=>p.map(a=>a.id===att.id?{...a,otOverride:+otVal||0}:a));setEditOtId(null);}} style={{...S.btn(T.green),padding:"2px 7px",fontSize:11}}>✓</button>
-                      <button onClick={()=>setEditOtId(null)} style={{...S.ghost,padding:"2px 5px",fontSize:11}}>✕</button>
-                    </span>):(
-                      <span><span style={{color:T.green,fontWeight:700}}>฿{fmt(finalOt)}</span>{att?.otOverride!==undefined&&att?.otOverride!==null&&<span style={{color:T.textXs,fontSize:11}}> (แก้ไข)</span>}<button onClick={()=>{setOtVal(String(finalOt));setEditOtId(s.id);}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:11,marginLeft:4}}>✏️</button></span>
+        {selStaff&&<QRDisplay staff={staff} staffId={selStaff} onIn={checkIn} onOut={checkOut} />}
+        <Card>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:9}}>📋 เข้างานวันนี้ — {today()}</div>
+          {workers.map(s=>{
+            const att=attendance.find(a=>a.staffId===s.id&&a.date===today());
+            const hr2=s.hr||{};
+            const otRes=att?.checkOut?calcOT(att.checkOut,hr2.otPerHour||50):{m:0,p:0};
+            const finalOt=att?.otOverride!==undefined&&att?.otOverride!==null?att.otOverride:otRes.p;
+            const editOt=editOtId===s.id;
+            return(
+              <div key={s.id} style={{padding:"9px 0",borderBottom:"1px solid "+T.bg}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:14}}>{s.name}</div>
+                    <div style={{color:T.textSm,fontSize:12}}>
+                      {att?.checkIn?"เข้า "+att.checkIn:"ยังไม่เช็คอิน"}
+                      {att?.checkOut?" • ออก "+att.checkOut:att?.checkIn?" • ยังอยู่":""}
+                    </div>
+                    {att?.checkOut&&otRes.m>0&&(
+                      <div style={{fontSize:12,marginTop:2}}>
+                        <span style={{color:T.orange,fontWeight:600}}>⏰ OT {otRes.m} นาที = </span>
+                        {editOt?(
+                          <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                            <input type="number" value={otVal} onChange={e=>setOtVal(e.target.value)}
+                              style={{width:68,padding:"2px 5px",border:"1px solid "+T.orange,borderRadius:6,fontSize:12}} autoFocus />
+                            <button onClick={()=>{setAttendance(p=>p.map(a=>a.id===att.id?{...a,otOverride:+otVal||0}:a));setEditOtId(null);}} style={{...S.btn(T.green),padding:"2px 7px",fontSize:11}}>✓</button>
+                            <button onClick={()=>setEditOtId(null)} style={{...S.ghost,padding:"2px 5px",fontSize:11}}>✕</button>
+                          </span>
+                        ):(
+                          <span>
+                            <span style={{color:T.green,fontWeight:700}}>฿{fmt(finalOt)}</span>
+                            {att?.otOverride!==undefined&&att?.otOverride!==null&&<span style={{color:T.textXs,fontSize:11}}> (แก้ไข)</span>}
+                            <button onClick={()=>{setOtVal(String(finalOt));setEditOtId(s.id);}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:11,marginLeft:4}}>✏️</button>
+                          </span>
+                        )}
+                      </div>
                     )}
-                  </div>}
-                  {att?.note&&<div style={{color:T.textXs,fontSize:11,marginTop:1}}>{att.note}</div>}
-                </div>
-                <div style={{display:"flex",gap:5}}>
-                  {!att?.checkIn&&<button onClick={()=>checkIn(s.id)} style={{...S.btn(T.green),fontSize:12,padding:"5px 10px"}}>เข้า</button>}
-                  {att?.checkIn&&!att?.checkOut&&<button onClick={()=>checkOut(s.id)} style={{...S.btn(T.red),fontSize:12,padding:"5px 10px"}}>ออก</button>}
-                  {att?.checkOut&&<span style={{color:T.green,fontSize:12,fontWeight:600}}>✅</span>}
+                  </div>
+                  <div style={{display:"flex",gap:5}}>
+                    {!att?.checkIn&&<button onClick={()=>checkIn(s.id)} style={{...S.btn(T.green),fontSize:12,padding:"5px 10px"}}>เข้า</button>}
+                    {att?.checkIn&&!att?.checkOut&&<button onClick={()=>checkOut(s.id)} style={{...S.btn(T.red),fontSize:12,padding:"5px 10px"}}>ออก</button>}
+                    {att?.checkOut&&<span style={{color:T.green,fontSize:12,fontWeight:600}}>✅</span>}
+                  </div>
                 </div>
               </div>
-            </div>);
+            );
           })}
         </Card>
       </div>}
+
       {tab==="salary"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <Card style={{padding:"11px 14px"}}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>เลือกเดือน</div><input type="month" value={salaryMonth} onChange={e=>setSalaryMonth(e.target.value)} style={{...S.inp,fontSize:15}} /></Card>
-        {workers.map(s=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);const{base,ot,bonus,total}=calcPay(s,att);const hr2=s.hr||{};return(
-          <Card key={s.id} style={{borderColor:T.orange}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontWeight:800,fontSize:16}}>{s.name}</div><div style={{color:T.orange,fontWeight:900,fontSize:20}}>฿{fmt(total)}</div></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:8}}>
-              {[["วันทำงาน",`${att.length} วัน`,T.blue],["OT",`${att.filter(a=>a.checkOut&&calcOT(a.checkOut,hr2.otPerHour||50).m>0).length} วัน`,T.orange],["฿/วัน",`฿${hr2.wage||0}`,T.textMd]].map(([l,v,col])=>(
-                <div key={l} style={{background:T.bg,borderRadius:8,padding:"6px",textAlign:"center"}}><div style={{color:T.textXs,fontSize:10}}>{l}</div><div style={{color:col,fontWeight:700,fontSize:13}}>{v}</div></div>
-              ))}
-            </div>
-            <div style={{borderTop:`1px solid ${T.bg}`,paddingTop:7}}>
-              {[["💼 ค่าจ้าง",base,T.text],["⏰ OT",ot,T.orange],["🎁 โบนัส",bonus,T.green]].map(([l,v,col])=>v>0&&<div key={l} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:13}}><span style={{color:T.textMd}}>{l}</span><span style={{color:col,fontWeight:600}}>฿{fmt(v)}</span></div>)}
-              <div style={{display:"flex",justifyContent:"space-between",paddingTop:5,marginTop:3,borderTop:`1px solid ${T.bg}`,fontWeight:800,fontSize:15}}><span>รวม</span><span style={{color:T.orange}}>฿{fmt(total)}</span></div>
-            </div>
-          </Card>
-        );})}
+        <Card style={{padding:"11px 14px"}}>
+          <div style={{color:T.textSm,fontSize:13,marginBottom:4}}>เลือกเดือน</div>
+          <input type="month" value={salaryMonth} onChange={e=>setSalaryMonth(e.target.value)} style={{...S.inp,fontSize:15}} />
+        </Card>
+        {workers.map(s=>{
+          const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);
+          const{base,ot,bonus,total}=calcPay(s,att);
+          const hr2=s.hr||{};
+          const otDays=att.filter(a=>a.checkOut&&calcOT(a.checkOut,hr2.otPerHour||50).m>0).length;
+          return(
+            <Card key={s.id} style={{borderColor:T.orange}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:16}}>{s.name}</div>
+                <div style={{color:T.orange,fontWeight:900,fontSize:20}}>฿{fmt(total)}</div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:8}}>
+                {[["วันทำงาน",att.length+" วัน",T.blue],["OT",otDays+" วัน",T.orange],["฿/วัน","฿"+(hr2.wage||0),T.textMd]].map(([l,v,col])=>(
+                  <div key={l} style={{background:T.bg,borderRadius:8,padding:6,textAlign:"center"}}>
+                    <div style={{color:T.textXs,fontSize:10}}>{l}</div>
+                    <div style={{color:col,fontWeight:700,fontSize:13}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{borderTop:"1px solid "+T.bg,paddingTop:7}}>
+                {[["💼 ค่าจ้าง",base,T.text],["⏰ OT",ot,T.orange],["🎁 โบนัส",bonus,T.green]].map(([l,v,col])=>v>0&&(
+                  <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:13}}>
+                    <span style={{color:T.textMd}}>{l}</span>
+                    <span style={{color:col,fontWeight:600}}>฿{fmt(v)}</span>
+                  </div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",paddingTop:5,marginTop:3,borderTop:"1px solid "+T.bg,fontWeight:800,fontSize:15}}>
+                  <span>รวม</span><span style={{color:T.orange}}>฿{fmt(total)}</span>
+                </div>
+              </div>
+              <div style={{color:T.textXs,fontSize:11,marginTop:3}}>
+                {hr2.wageType==="day"?"฿"+hr2.wage+"/วัน":"฿"+hr2.wage+"/เดือน"} • OT ฿{hr2.otPerHour||50}/ชม. • โบนัส {hr2.bonusPct||0}%
+              </div>
+            </Card>
+          );
+        })}
         <Card style={{background:T.orangeLt,borderColor:T.borderOr}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,marginBottom:9}}><span>รวมจ่ายทั้งหมด</span><span style={{color:T.orange}}>฿{fmt(workers.reduce((sum,s)=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);return sum+calcPay(s,att).total;},0))}</span></div>
-          <button onClick={()=>{const lines=["📋 สรุปเงินเดือน "+salaryMonth,"─────────────"];workers.forEach(s=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);const{base,ot,bonus,total}=calcPay(s,att);lines.push("","👤 "+s.name,`  วัน: ${att.length}  ฐาน: ฿${fmt(base)}${ot>0?`  OT: ฿${fmt(ot)}`:""}${bonus>0?`  โบนัส: ฿${fmt(bonus)}`:""}`,`  รวม: ฿${fmt(total)}`);});lines.push("","─────────────","รวม: ฿"+fmt(workers.reduce((s2,s)=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);return s2+calcPay(s,att).total;},0)));const msg=lines.join("\n");if(navigator.clipboard)navigator.clipboard.writeText(msg).then(()=>alert("คัดลอกแล้ว!"));else{const ta=document.createElement("textarea");ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);alert("คัดลอกแล้ว!");}}} style={{...S.btn(),width:"100%",padding:11,fontSize:14}}>📋 สรุปเงินเดือน (Copy)</button>
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,marginBottom:9}}>
+            <span>รวมจ่ายทั้งหมด</span>
+            <span style={{color:T.orange}}>฿{fmt(workers.reduce((sum,s)=>{
+              const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);
+              return sum+calcPay(s,att).total;
+            },0))}</span>
+          </div>
+          <button onClick={()=>{
+            const lines=["📋 สรุปเงินเดือน "+salaryMonth,"─────────────"];
+            workers.forEach(s=>{
+              const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);
+              const{base,ot,bonus,total}=calcPay(s,att);
+              lines.push("","👤 "+s.name,"  วัน: "+att.length+"  ฐาน: ฿"+fmt(base)+(ot>0?"  OT: ฿"+fmt(ot):"")+(bonus>0?"  โบนัส: ฿"+fmt(bonus):""),"  รวม: ฿"+fmt(total));
+            });
+            lines.push("","─────────────","รวม: ฿"+fmt(workers.reduce((s2,s)=>{
+              const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);
+              return s2+calcPay(s,att).total;
+            },0)));
+            const msg=lines.join("
+");
+            if(navigator.clipboard)navigator.clipboard.writeText(msg).then(()=>alert("คัดลอกแล้ว!"));
+            else{const ta=document.createElement("textarea");ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);alert("คัดลอกแล้ว!");}
+          }} style={{...S.btn(),width:"100%",padding:11,fontSize:14}}>📋 สรุปเงินเดือน (Copy)</button>
         </Card>
       </div>}
+
       {tab==="config"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {workers.map(s=>{const hr=s.hr||{wage:350,wageType:"day",otPerHour:50,shiftStart:"09:00",shiftEnd:"18:00",bonusPct:0};const isEdit=editHrId===s.id;const ed=isEdit?hrEdit:hr;return(
-          <Card key={s.id}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontWeight:700,fontSize:15}}>{s.name}</div>{!isEdit&&<button onClick={()=>{setEditHrId(s.id);setHrEdit({...hr});}} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>✏️ แก้ไข</button>}</div>
-            {!isEdit&&<div style={{color:T.textSm,fontSize:13,marginTop:3}}>{hr.wageType==="day"?`฿${hr.wage}/วัน`:`฿${hr.wage}/เดือน`} • OT ฿{hr.otPerHour||50}/ชม. • โบนัส {hr.bonusPct||0}%</div>}
-            {isEdit&&<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:9}}>
-              <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>ประเภท</div><select value={ed.wageType||"day"} onChange={e=>setHrEdit(p=>({...p,wageType:e.target.value}))} style={{...S.inp,height:40}}><option value="day">รายวัน</option><option value="month">รายเดือน</option></select></div>
-              <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{ed.wageType==="month"?"฿/เดือน":"฿/วัน"}</div><input type="number" value={ed.wage||0} onChange={e=>setHrEdit(p=>({...p,wage:+e.target.value}))} style={S.inp} /></div>
-              <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>OT ฿/ชม.</div><input type="number" value={ed.otPerHour??50} onChange={e=>setHrEdit(p=>({...p,otPerHour:+e.target.value}))} style={S.inp} /></div>
-              <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>โบนัส %</div><input type="number" step="0.5" value={ed.bonusPct||0} onChange={e=>setHrEdit(p=>({...p,bonusPct:+e.target.value}))} style={S.inp} /></div>
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{setStaff(p=>p.map(x=>x.id===s.id?{...x,hr:hrEdit}:x));setEditHrId(null);}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>setEditHrId(null)} style={S.ghost}>ยกเลิก</button></div></>}
-          </Card>
-        );})}
+        {workers.map(s=>{
+          const hr=s.hr||{wage:350,wageType:"day",otPerHour:50,shiftStart:"09:00",shiftEnd:"18:00",bonusPct:0};
+          const isEdit=editHrId===s.id;
+          const ed=isEdit?hrEdit:hr;
+          return(
+            <Card key={s.id}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontWeight:700,fontSize:15}}>{s.name}</div>
+                {!isEdit&&<button onClick={()=>{setEditHrId(s.id);setHrEdit({...hr});}} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>✏️ แก้ไข</button>}
+              </div>
+              {!isEdit&&<div style={{color:T.textSm,fontSize:13,marginTop:3}}>
+                {hr.wageType==="day"?"฿"+hr.wage+"/วัน":"฿"+hr.wage+"/เดือน"} • OT ฿{hr.otPerHour||50}/ชม. • โบนัส {hr.bonusPct||0}%
+              </div>}
+              {isEdit&&(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:9}}>
+                    <div>
+                      <div style={{color:T.textSm,fontSize:12,marginBottom:3}}>ประเภท</div>
+                      <select value={ed.wageType||"day"} onChange={e=>setHrEdit(p=>({...p,wageType:e.target.value}))} style={{...S.inp,height:40}}>
+                        <option value="day">รายวัน</option>
+                        <option value="month">รายเดือน</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{ed.wageType==="month"?"฿/เดือน":"฿/วัน"}</div>
+                      <input type="number" value={ed.wage||0} onChange={e=>setHrEdit(p=>({...p,wage:+e.target.value}))} style={S.inp} />
+                    </div>
+                    <div>
+                      <div style={{color:T.textSm,fontSize:12,marginBottom:3}}>OT ฿/ชม.</div>
+                      <input type="number" value={ed.otPerHour??50} onChange={e=>setHrEdit(p=>({...p,otPerHour:+e.target.value}))} style={S.inp} />
+                    </div>
+                    <div>
+                      <div style={{color:T.textSm,fontSize:12,marginBottom:3}}>โบนัส %</div>
+                      <input type="number" step="0.5" value={ed.bonusPct||0} onChange={e=>setHrEdit(p=>({...p,bonusPct:+e.target.value}))} style={S.inp} />
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,marginTop:9}}>
+                    <button onClick={()=>{setStaff(p=>p.map(x=>x.id===s.id?{...x,hr:hrEdit}:x));setEditHrId(null);}} style={{...S.btn(),flex:1}}>บันทึก</button>
+                    <button onClick={()=>setEditHrId(null)} style={S.ghost}>ยกเลิก</button>
+                  </div>
+                </>
+              )}
+            </Card>
+          );
+        })}
       </div>}
     </div>
   );
