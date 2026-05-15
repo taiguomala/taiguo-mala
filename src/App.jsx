@@ -783,14 +783,28 @@ function StaffCheckinPage({user,attendance,setAttendance,shopLat,shopLng,shopRad
 }
 
 
-function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
-  const[tab,setTab]=useState("checkin");const[selStaff,setSelStaff]=useState("");const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));const[editHrId,setEditHrId]=useState(null);const[hrEdit,setHrEdit]=useState({});const[editOtId,setEditOtId]=useState(null);const[otVal,setOtVal]=useState("");
-  const workers=staff.filter(s=>s.role==="staff"&&s.active);
-  const nowFn=()=>new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
-  const checkIn=sid=>{if(attendance.find(a=>a.staffId===sid&&a.date===today()&&!a.checkOut)){alert("เช็คอินแล้ว");return;}setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date:today(),checkIn:nowFn(),checkOut:"",note:""}]);};
-  const checkOut=sid=>setAttendance(p=>p.map(a=>a.staffId===sid&&a.date===today()&&!a.checkOut?{...a,checkOut:nowFn()}:a));
-  const calcPay=(s,att)=>{const hr=s.hr||{};const wage=hr.wage||0;const wt=hr.wageType||"day";let base=wt==="month"?wage:att.filter(a=>a.checkIn).length*wage;const otp=hr.otPerHour||50;const ot=att.reduce((sum,a)=>{const ov=a.otOverride;return sum+(ov!==undefined&&ov!==null?ov:calcOT(a.checkOut,otp).p);},0);let bonus=0;if(hr.bonusPct>0){const sales=cf.filter(e=>e.flow==="in"&&e.staffId===s.id&&e.date.startsWith(salaryMonth)).reduce((a,b)=>a+b.amount,0);bonus=sales*(hr.bonusPct/100);}return{base,ot,bonus,total:base+ot+bonus};};
-  const QRCodeDisplay=({staffId})=>{const s=staff.find(x=>x.id===staffId);if(!s)return null;const url=`${window.location.origin}${window.location.pathname}?sid=${s.id}`;const qr=`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;return(
+function QRCodeDisplay({staff,staffId}){
+  const s=staff.find(x=>x.id===staffId);if(!s)return null;
+  const url=`${window.location.origin}${window.location.pathname}?sid=${s.id}`;
+  const qr=`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
+  return(
+    <div style={{textAlign:"center",padding:12}}>
+      <div style={{background:"#fff",padding:12,borderRadius:14,border:`2px solid ${T.orange}`,display:"inline-block"}}>
+        <img src={qr} alt="QR" style={{width:160,height:160,display:"block"}} />
+        <div style={{fontWeight:800,fontSize:15,marginTop:6}}>{s.name}</div>
+        <div style={{color:T.textSm,fontSize:11}}>สแกนเพื่อเช็คเวลา</div>
+      </div>
+      <div style={{marginTop:8,fontSize:11,color:T.textSm,wordBreak:"break-all"}}>{url}</div>
+    </div>
+  );
+}
+
+
+function QRCodeDisplay({staff,staffId,onCheckIn,onCheckOut}){
+  const s=staff.find(x=>x.id===staffId);if(!s)return null;
+  const url=`${window.location.origin}${window.location.pathname}?sid=${s.id}`;
+  const qr=`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
+  return(
     <div style={{textAlign:"center",padding:12}}>
       <div style={{background:"#fff",padding:12,borderRadius:14,border:`2px solid ${T.orange}`,display:"inline-block"}}>
         <img src={qr} alt="QR" style={{width:160,height:160,display:"block"}} />
@@ -801,11 +815,27 @@ function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
       <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:7,flexWrap:"wrap"}}>
         <button onClick={()=>window.open(url,"_blank")} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>🔗 เปิด URL</button>
         <button onClick={()=>window.print()} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>🖨 พิมพ์ QR</button>
-        <button onClick={()=>checkIn(staffId)} style={{...S.btn(T.green),fontSize:12,padding:"5px 10px"}}>📥 บันทึกเข้า</button>
-        <button onClick={()=>checkOut(staffId)} style={{...S.btn(T.red),fontSize:12,padding:"5px 10px"}}>📤 บันทึกออก</button>
+        <button onClick={()=>onCheckIn(staffId)} style={{...S.btn(T.green),fontSize:12,padding:"5px 10px"}}>📥 บันทึกเข้า</button>
+        <button onClick={()=>onCheckOut(staffId)} style={{...S.btn(T.red),fontSize:12,padding:"5px 10px"}}>📤 บันทึกออก</button>
       </div>
-    </div>
-  );};
+  );
+}
+
+
+function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
+  const[tab,setTab]=useState("checkin");const[selStaff,setSelStaff]=useState("");const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));const[editHrId,setEditHrId]=useState(null);const[hrEdit,setHrEdit]=useState({});const[editOtId,setEditOtId]=useState(null);const[otVal,setOtVal]=useState("");
+  const workers=staff.filter(s=>s.role==="staff"&&s.active);
+  const nowFn=()=>new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+  const checkIn=sid=>{if(attendance.find(a=>a.staffId===sid&&a.date===today()&&!a.checkOut)){alert("เช็คอินแล้ว");return;}setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date:today(),checkIn:nowFn(),checkOut:"",note:""}]);};
+  const checkOut=sid=>setAttendance(p=>p.map(a=>a.staffId===sid&&a.date===today()&&!a.checkOut?{...a,checkOut:nowFn()}:a));
+  const calcPay=(s,att)=>{const hr=s.hr||{};const wage=hr.wage||0;const wt=hr.wageType||"day";let base=wt==="month"?wage:att.filter(a=>a.checkIn).length*wage;const otp=hr.otPerHour||50;const ot=att.reduce((sum,a)=>{const ov=a.otOverride;return sum+(ov!==undefined&&ov!==null?ov:calcOT(a.checkOut,otp).p);},0);let bonus=0;if(hr.bonusPct>0){const sales=cf.filter(e=>e.flow==="in"&&e.staffId===s.id&&e.date.startsWith(salaryMonth)).reduce((a,b)=>a+b.amount,0);bonus=sales*(hr.bonusPct/100);}return{base,ot,bonus,total:base+ot+bonus};};
+nction HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
+  const[tab,setTab]=useState("checkin");const[selStaff,setSelStaff]=useState("");const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));const[editHrId,setEditHrId]=useState(null);const[hrEdit,setHrEdit]=useState({});const[editOtId,setEditOtId]=useState(null);const[otVal,setOtVal]=useState("");
+  const workers=staff.filter(s=>s.role==="staff"&&s.active);
+  const nowFn=()=>new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+  const checkIn=sid=>{if(attendance.find(a=>a.staffId===sid&&a.date===today()&&!a.checkOut)){alert("เช็คอินแล้ว");return;}setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date:today(),checkIn:nowFn(),checkOut:"",note:""}]);};
+  const checkOut=sid=>setAttendance(p=>p.map(a=>a.staffId===sid&&a.date===today()&&!a.checkOut?{...a,checkOut:nowFn()}:a));
+  const calcPay=(s,att)=>{const hr=s.hr||{};const wage=hr.wage||0;const wt=hr.wageType||"day";let base=wt==="month"?wage:att.filter(a=>a.checkIn).length*wage;const otp=hr.otPerHour||50;const ot=att.reduce((sum,a)=>{const ov=a.otOverride;return sum+(ov!==undefined&&ov!==null?ov:calcOT(a.checkOut,otp).p);},0);let bonus=0;if(hr.bonusPct>0){const sales=cf.filter(e=>e.flow==="in"&&e.staffId===s.id&&e.date.startsWith(salaryMonth)).reduce((a,b)=>a+b.amount,0);bonus=sales*(hr.bonusPct/100);}return{base,ot,bonus,total:base+ot+bonus};};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Hdr title="👥 HR & เงินเดือน" action={<div style={{display:"flex",gap:6}}>
@@ -819,7 +849,7 @@ function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
         <Card><div style={{fontWeight:700,fontSize:14,marginBottom:7}}>🖨 QR Code พนักงาน</div>
           <select value={selStaff} onChange={e=>setSelStaff(e.target.value)} style={{...S.inp,fontSize:15,height:44}}><option value="">— เลือกพนักงาน —</option>{workers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
         </Card>
-        {selStaff&&<QRCodeDisplay staffId={selStaff} />}
+        {selStaff&&<QRCodeDisplay staff={staff} staffId={selStaff} onCheckIn={checkIn} onCheckOut={checkOut} />}
         <Card><div style={{fontWeight:700,fontSize:14,marginBottom:9}}>📋 เข้างานวันนี้</div>
           {workers.map(s=>{const att=attendance.find(a=>a.staffId===s.id&&a.date===today());const hr2=s.hr||{};const{m:otMins,p:otPay}=att?.checkOut?calcOT(att.checkOut,hr2.otPerHour||50):{m:0,p:0};const finalOt=att?.otOverride!==undefined&&att?.otOverride!==null?att.otOverride:otPay;const editOt=editOtId===s.id;
             return(<div key={s.id} style={{padding:"9px 0",borderBottom:`1px solid ${T.bg}`}}>
