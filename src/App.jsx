@@ -40,6 +40,11 @@ function Tabs({tabs,active,onChange}){return <div style={{display:"flex",gap:6,f
 function Hdr({title,action}){return <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}><div style={{fontSize:20,fontWeight:900}}>{title}</div>{action}</div>;}
 function IEBtn({onImport,onExport}){const ref=useRef();return <div style={{display:"flex",gap:6}}><input ref={ref} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={async e=>{if(e.target.files[0]){try{onImport(await readXlsx(e.target.files[0]));}catch{alert("ไฟล์ผิดรูปแบบ");}e.target.value="";}}} /><button onClick={()=>ref.current?.click()} style={{...S.ghost,fontSize:13,padding:"7px 10px"}}>📥</button><button onClick={onExport} style={{...S.ghost,fontSize:13,padding:"7px 10px"}}>📤</button></div>;}
 
+function ClearBtn({onClear,label="ล้างข้อมูล"}){
+  return <button onClick={()=>{if(window.confirm(`ล้าง${label}?
+ข้อมูลจะหายถาวร`))onClear();}} style={{...S.btn(T.red),fontSize:12,padding:"6px 10px"}}>🗑 ล้าง</button>;
+}
+
 function CheckinPage({staff,shopLat,shopLng,shopRadius,onCheckin}){
   const sid=new URLSearchParams(window.location.search).get("sid");
   const s=staff.find(x=>x.id===sid);
@@ -259,7 +264,7 @@ function CashflowPage({cf,setCF,user,dbReady}){
       <Hdr title="💵 Cash Flow" action={<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         <button onClick={()=>setShowSetup(!showSetup)} style={{...S.ghost,fontSize:13,padding:"7px 10px"}}>⚙️ ยอดเปิด</button>
         <IEBtn onExport={()=>exportXlsx(cf.map(e=>({วันที่:e.date,ประเภท:e.flow==="in"?"รายรับ":"รายจ่าย",หมวด:e.cat,ชื่อ:e.itemName||"",จำนวน:e.amount,ช่องทาง:e.method})),"cashflow","cashflow")} onImport={rows=>{const m=rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),flow:r["ประเภท"]==="รายรับ"?"in":"out",cat:r["หมวด"]||IN_CATS[0],itemName:r["ชื่อ"]||"",amount:+r["จำนวน"]||0,method:r["ช่องทาง"]||"เงินสด",note:"",branch:"main",staffId:"owner"})).filter(r=>r.amount>0);setCF(p=>[...m,...p]);alert(`นำเข้า ${m.length} รายการ`);}} />
-        <button onClick={clearAll} style={{...S.btn(T.red),fontSize:13,padding:"7px 10px"}}>🗑</button>
+        {user.role==="owner"&&<button onClick={clearAll} style={{...S.btn(T.red),fontSize:13,padding:"7px 10px"}}>🗑 ล้าง</button>}
         <button onClick={()=>setShowForm(!showForm)} style={S.btn()}>+ กรอก</button>
       </div>} />
       {showSetup&&<Card style={{borderColor:T.borderOr,background:T.orangeLt}}>
@@ -371,6 +376,7 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Hdr title="📦 สต็อค" action={<div style={{display:"flex",gap:6}}>
         <IEBtn onExport={()=>exportXlsx(stock.map(s=>({ชื่อ:s.name,หน่วย:s.unit,จำนวน:s.qty,ขั้นต่ำ:s.minQty,ใช้ต่อวัน:s.dailyUse})),"stock","stock")} onImport={rows=>{let a=0,u=0;const ns=[...stock];rows.forEach(r=>{const name=r["ชื่อ"]||r["name"]||"";if(!name)return;const idx=ns.findIndex(s=>s.name===name);if(idx>=0){if(r["จำนวน"]!==undefined)ns[idx]={...ns[idx],qty:+r["จำนวน"]};u++;}else{ns.push({id:Date.now()+Math.random(),name,unit:r["หน่วย"]||"kg",qty:+(r["จำนวน"]||0),minQty:+(r["ขั้นต่ำ"]||3),dailyUse:+(r["ใช้ต่อวัน"]||1),supplierId:1,costHistory:[]});a++;}});setStock(ns);alert(`เพิ่ม ${a} อัพเดท ${u}`);}} />
+        {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{setStock(INIT_STOCK);setMovements([]);}} />}
         <button onClick={()=>setShowAdd(!showAdd)} style={S.btn()}>+ เพิ่ม</button>
       </div>} />
       {showAdd&&<Card style={{borderColor:T.borderOr}}>
@@ -558,7 +564,7 @@ function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,se
   const costAna=stock.map(s=>{const h=s.costHistory||[];if(!h.length)return null;const avg=wac(s);const mid=Math.floor(h.length/2);const f=h.slice(0,mid).reduce((a,b)=>a+b.unitCost,0)/Math.max(mid,1);const sc=h.slice(mid).reduce((a,b)=>a+b.unitCost,0)/Math.max(h.length-mid,1);const trend=f>0?((sc-f)/f*100):0;const prices=h.map(x=>x.unitCost);const risk=trend>20?"high":trend>10?"medium":"low";return{s,avg,trend,risk,last3:h.slice(-3),maxP:Math.max(...prices),minP:Math.min(...prices)};}).filter(Boolean);
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Hdr title="📊 รายงาน" action={<IEBtn onExport={()=>{if(tab==="pl")exportXlsx([{เดือน:mk,รายรับ:mIn,รายจ่าย:mOut,กำไรสุทธิ:netP}],"P&L","pl");else if(tab==="waste")exportXlsx((waste||[]).map(w=>({วันที่:w.date,สินค้า:w.itemName,จำนวน:w.qty,มูลค่า:w.cost})),"waste","waste");else if(tab==="promo")exportXlsx((promos||[]).map(p=>({วันที่:p.date,โปร:p.name,มูลค่า:p.amount})),"promo","promo");else exportXlsx([],"data","report");}} onImport={rows=>{if(tab==="waste")setWaste(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),itemName:r["สินค้า"]||"",qty:+r["จำนวน"]||0,reason:"",cost:+r["มูลค่า"]||0,itemId:""}))]);else if(tab==="promo")setPromos(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),name:r["โปร"]||"",amount:+r["มูลค่า"]||0}))]);}} />} />
+      <Hdr title="📊 รายงาน" action={<IEBtn onExport={()=>{if(tab==="pl")exportXlsx([{เดือน:mk,รายรับ:mIn,รายจ่าย:mOut,กำไรสุทธิ:netP}],"P&L","pl");else if(tab==="waste")exportXlsx((waste||[]).map(w=>({วันที่:w.date,สินค้า:w.itemName,จำนวน:w.qty,มูลค่า:w.cost})),"waste","waste");else if(tab==="promo")exportXlsx((promos||[]).map(p=>({วันที่:p.date,โปร:p.name,มูลค่า:p.amount})),"promo","promo");else exportXlsx([],"data","report");}} onImport={rows=>{if(tab==="waste")setWaste(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),itemName:r["สินค้า"]||"",qty:+r["จำนวน"]||0,reason:"",cost:+r["มูลค่า"]||0,itemId:""}))]);else if(tab==="promo")setPromos(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),name:r["โปร"]||"",amount:+r["มูลค่า"]||0}))]);}} />{user.role==="owner"&&(tab==="waste"?<ClearBtn label="Waste ทั้งหมด" onClear={()=>setWaste([])} />:tab==="promo"?<ClearBtn label="โปรโมชั่นทั้งหมด" onClear={()=>setPromos([])} />:null)}} />
       <Tabs tabs={[["pl","💰 P&L"],["cost","📈 ต้นทุน"],["forecast","🔮 พยากรณ์"],["waste","🗑 Waste"],["promo","🎁 โปร"]]} active={tab} onChange={setTab} />
       {tab==="pl"&&<>
         <Card style={{background:T.orangeLt,borderColor:T.borderOr}}>
@@ -690,7 +696,7 @@ function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
   );};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Hdr title="👥 HR & เงินเดือน" action={<IEBtn onExport={()=>{if(tab==="salary")exportXlsx(workers.map(s=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);const{base,ot,bonus,total}=calcPay(s,att);return{ชื่อ:s.name,วันทำงาน:att.length,ค่าจ้าง:Math.round(base),OT:Math.round(ot),โบนัส:Math.round(bonus),รวม:Math.round(total)};}), "เงินเดือน","salary");else exportXlsx(attendance.map(a=>{const s=workers.find(x=>x.id===a.staffId);return{ชื่อ:s?.name||a.staffId,วันที่:a.date,เข้า:a.checkIn,ออก:a.checkOut||"-",หมายเหตุ:a.note||""};}), "attendance","attendance");}} onImport={rows=>{const m=rows.map(r=>{const s=workers.find(x=>x.name===r["ชื่อ"]);return{id:Date.now()+Math.random(),staffId:s?.id||"",date:r["วันที่"]||today(),checkIn:r["เข้า"]||"",checkOut:r["ออก"]||"",note:""};}).filter(r=>r.staffId);setAttendance(p=>[...p,...m]);alert(`นำเข้า ${m.length} รายการ`);}} />} />
+      <Hdr title="👥 HR & เงินเดือน" action={<IEBtn onExport={()=>{if(tab==="salary")exportXlsx(workers.map(s=>{const att=attendance.filter(a=>a.staffId===s.id&&a.date.startsWith(salaryMonth)&&a.checkIn);const{base,ot,bonus,total}=calcPay(s,att);return{ชื่อ:s.name,วันทำงาน:att.length,ค่าจ้าง:Math.round(base),OT:Math.round(ot),โบนัส:Math.round(bonus),รวม:Math.round(total)};}), "เงินเดือน","salary");else exportXlsx(attendance.map(a=>{const s=workers.find(x=>x.id===a.staffId);return{ชื่อ:s?.name||a.staffId,วันที่:a.date,เข้า:a.checkIn,ออก:a.checkOut||"-",หมายเหตุ:a.note||""};}), "attendance","attendance");}} onImport={rows=>{const m=rows.map(r=>{const s=workers.find(x=>x.name===r["ชื่อ"]);return{id:Date.now()+Math.random(),staffId:s?.id||"",date:r["วันที่"]||today(),checkIn:r["เข้า"]||"",checkOut:r["ออก"]||"",note:""};}).filter(r=>r.staffId);setAttendance(p=>[...p,...m]);alert(`นำเข้า ${m.length} รายการ`);}} />{user.role==="owner"&&tab==="checkin"&&<ClearBtn label="ประวัติการเข้างาน" onClear={()=>setAttendance([])} />}} />
       <Tabs tabs={[["checkin","📲 เช็คเข้า-ออก"],["salary","💰 เงินเดือน"],["config","⚙️ ตั้งค่า"]]} active={tab} onChange={setTab} />
       {tab==="checkin"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
         {shopLat&&shopLng?<Card style={{background:T.greenLt,borderColor:T.green+"44"}}><div style={{color:T.green,fontWeight:700,fontSize:14}}>📍 ตั้งค่าพิกัดร้านแล้ว</div><div style={{color:T.textSm,fontSize:13}}>พนักงานต้องอยู่ในรัศมีร้านถึงจะเช็คเวลาได้</div></Card>
