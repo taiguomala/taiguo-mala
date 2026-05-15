@@ -565,7 +565,7 @@ function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,se
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Hdr title="📊 รายงาน" action={<div style={{display:"flex",gap:6}}><IEBtn onExport={()=>{if(tab==="pl"&&user.role==="owner")exportXlsx([{เดือน:mk,รายรับ:mIn,รายจ่าย:mOut,กำไรสุทธิ:netP}],"P&L","pl");else if(tab==="waste")exportXlsx((waste||[]).map(w=>({วันที่:w.date,สินค้า:w.itemName,จำนวน:w.qty,มูลค่า:w.cost})),"waste","waste");else if(tab==="promo")exportXlsx((promos||[]).map(p=>({วันที่:p.date,โปร:p.name,มูลค่า:p.amount})),"promo","promo");else exportXlsx([],"data","report");}} onImport={rows=>{if(tab==="waste")setWaste(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),itemName:r["สินค้า"]||"",qty:+r["จำนวน"]||0,reason:"",cost:+r["มูลค่า"]||0,itemId:""}))]);else if(tab==="promo")setPromos(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),name:r["โปร"]||"",amount:+r["มูลค่า"]||0}))]);}} />{user.role==="owner"&&(tab==="waste"?<ClearBtn label="Waste ทั้งหมด" onClear={()=>setWaste([])} />:tab==="promo"?<ClearBtn label="โปรโมชั่นทั้งหมด" onClear={()=>setPromos([])} />:null)}</div>} />
-      <Tabs tabs={[...(user.role==="owner"?[["pl","💰 P&L"],["cost","📈 ต้นทุน"]]:[]),(["forecast","🔮 พยากรณ์"]),["waste","🗑 Waste"],["promo","🎁 โปร"]].flat().filter(Boolean)} active={tab} onChange={setTab} />
+      <Tabs tabs={[...(user.role==="owner"?[["pl","💰 P&L"],["cost","📈 ต้นทุน"]]:[]),["forecast","🔮 พยากรณ์"],["waste","🗑 Waste"],["promo","🎁 โปร"]]} active={tab} onChange={setTab} />
       {tab==="pl"&&user.role==="owner"&&<>
         <Card style={{background:T.orangeLt,borderColor:T.borderOr}}>
           <div style={{color:T.orange,fontWeight:700,fontSize:13,marginBottom:9}}>เดือน {mk}</div>
@@ -995,7 +995,7 @@ export default function App(){
   const urlSid=new URLSearchParams(window.location.search).get("sid");
   if(urlSid)return <CheckinPage staff={staff} shopLat={shopLat} shopLng={shopLng} shopRadius={shopRadius} onCheckin={(sid,type,time,date,gps)=>{if(type==="in")setAttendance(p=>[...p,{id:Date.now(),staffId:sid,date,checkIn:time,checkOut:"",note:gps?`📍 ${gps.lat},${gps.lng} ±${gps.acc}m`:""}]);else setAttendance(p=>p.map(a=>a.staffId===sid&&a.date===date&&!a.checkOut?{...a,checkOut:time}:a));}} />;
 
-  if(!user)return <LoginPage staff={staff} onLogin={u=>{setUser(u);setPage("dashboard");}}/>;
+  if(!user)return <LoginPage staff={staff} onLogin={u=>{setUser(u);setPage(u.role==="owner"?"dashboard":"staffcheckin");}}/>;
 
   if(user.id==="emergency")return(
     <div style={{minHeight:"100vh",background:T.bg,fontFamily:F,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,gap:14}}>
