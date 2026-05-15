@@ -4,13 +4,46 @@ import*as XLSX from"xlsx";
 const SB="https://klmowpluuvjmbvvmqzep.supabase.co";
 const SK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtsbW93cGx1dXZqbWJ2dm1xemVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMTIzMTMsImV4cCI6MjA5Mzg4ODMxM30.aXQz6WBqE8US5_-ij6GvvY0XaCykMag8x6W2a6uAwMU";
 async function sb(path,o={}){try{const r=await fetch(`${SB}/rest/v1/${path}`,{...o,headers:{apikey:SK,Authorization:`Bearer ${SK}`,"Content-Type":"application/json",Prefer:o.prefer||"return=representation",...o.headers}});if(!r.ok)return null;const t=await r.text();return t?JSON.parse(t):[];}catch{return null;}}
-const db={getCF:()=>sb("cashflow?order=date.desc,id.desc"),addCF:r=>sb("cashflow",{method:"POST",body:JSON.stringify(r)}),delCF:id=>sb(`cashflow?id=eq.${id}`,{method:"DELETE",prefer:""}),clearCF:()=>sb("cashflow?id=gt.0",{method:"DELETE",prefer:""}),getStock:()=>sb("stock?order=name.asc"),upsertStock:rows=>sb("stock",{method:"POST",body:JSON.stringify(rows),headers:{Prefer:"resolution=merge-duplicates,return=representation"}}),getMvs:()=>sb("movements?order=date.desc,id.desc"),addMv:r=>sb("movements",{method:"POST",body:JSON.stringify(r)}),clearMvs:()=>sb("movements?id=gt.0",{method:"DELETE",prefer:""}),getAtt:()=>sb("attendance?order=date.desc"),addAtt:r=>sb("attendance",{method:"POST",body:JSON.stringify(r)}),patchAtt:(id,d)=>sb(`attendance?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(d)})};
+const db={
+  // Cash Flow
+  getCF:()=>sb("cashflow?order=date.desc,id.desc"),
+  addCF:r=>sb("cashflow",{method:"POST",body:JSON.stringify(r)}),
+  delCF:id=>sb(`cashflow?id=eq.${id}`,{method:"DELETE",prefer:""}),
+  clearCF:()=>sb("cashflow?id=gt.0",{method:"DELETE",prefer:""}),
+  // Stock
+  getStock:()=>sb("stock?order=name.asc"),
+  upsertStock:rows=>sb("stock",{method:"POST",body:JSON.stringify(rows),headers:{Prefer:"resolution=merge-duplicates,return=representation"}}),
+  // Movements
+  getMvs:()=>sb("movements?order=date.desc,id.desc"),
+  addMv:r=>sb("movements",{method:"POST",body:JSON.stringify(r)}),
+  clearMvs:()=>sb("movements?id=gt.0",{method:"DELETE",prefer:""}),
+  // Attendance
+  getAtt:()=>sb("attendance?order=date.desc"),
+  addAtt:r=>sb("attendance",{method:"POST",body:JSON.stringify(r)}),
+  patchAtt:(id,d)=>sb(`attendance?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(d)}),
+  clearAtt:()=>sb("attendance?id=gt.0",{method:"DELETE",prefer:""}),
+  // Waste
+  getWaste:()=>sb("waste?order=date.desc"),
+  addWaste:r=>sb("waste",{method:"POST",body:JSON.stringify(r)}),
+  delWaste:id=>sb(`waste?id=eq.${id}`,{method:"DELETE",prefer:""}),
+  clearWaste:()=>sb("waste?id=gt.0",{method:"DELETE",prefer:""}),
+  // Promos
+  getPromos:()=>sb("promos?order=date.desc"),
+  addPromo:r=>sb("promos",{method:"POST",body:JSON.stringify(r)}),
+  delPromo:id=>sb(`promos?id=eq.${id}`,{method:"DELETE",prefer:""}),
+  clearPromos:()=>sb("promos?id=gt.0",{method:"DELETE",prefer:""}),
+  // Settings (key-value store)
+  getSettings:()=>sb("settings"),
+  upsertSetting:(key,value)=>sb("settings",{method:"POST",body:JSON.stringify({key,value:JSON.stringify(value)}),headers:{Prefer:"resolution=merge-duplicates,return=representation"}}),
+};
 
 const T={bg:"#f4f4f5",card:"#fff",border:"#e4e4e7",text:"#18181b",textMd:"#52525b",textSm:"#71717a",textXs:"#a1a1aa",orange:"#f97316",orangeDk:"#ea580c",orangeLt:"#fff7ed",borderOr:"#fed7aa",green:"#16a34a",greenLt:"#f0fdf4",red:"#dc2626",redLt:"#fef2f2",yellow:"#d97706",yellowLt:"#fffbeb",blue:"#2563eb",blueLt:"#eff6ff"};
 const F="'Noto Sans Thai',sans-serif";
 const S={inp:{width:"100%",padding:"10px 12px",border:`1px solid #e4e4e7`,borderRadius:10,fontSize:15,fontFamily:F,background:"#fff",outline:"none",boxSizing:"border-box",color:"#18181b"},btn:(bg="#f97316")=>({background:bg,color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",cursor:"pointer",fontWeight:700,fontSize:15,fontFamily:F}),ghost:{background:"transparent",border:"1px solid #e4e4e7",borderRadius:10,padding:"9px 14px",cursor:"pointer",fontSize:14,color:"#52525b",fontFamily:F},card:{background:"#fff",border:"1px solid #e4e4e7",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,.08)"}};
 
 const today=()=>new Date().toISOString().split("T")[0];
+const lsGet=(k,def)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 const fmt=n=>Math.round(n).toLocaleString("th-TH");
 const IN_CATS=["ยอดขาย dine-in","ยอดขาย delivery","เงินโอนเข้า","อื่นๆ"];
 const OUT_CATS=["วัตถุดิบ/ผัก","หมู/เนื้อ/ทะเล","ค่าเช่า","ค่าพนักงาน","ค่าไฟ/น้ำ","บรรจุภัณฑ์","อื่นๆ"];
@@ -640,7 +673,7 @@ function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,se
             <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>สาเหตุ</div><input value={wF.reason||""} onChange={e=>setWF(p=>({...p,reason:e.target.value}))} style={S.inp} placeholder="เช่น ผักเน่า" /></div>
           </div>
           {wF.itemId&&wF.qty&&<div style={{background:T.redLt,borderRadius:8,padding:"7px 12px",marginTop:8,fontSize:14}}>มูลค่า: <b style={{color:T.red}}>฿{fmt(wac(stock.find(s=>String(s.id)===String(wF.itemId))||{costHistory:[]})*(+wF.qty||0))}</b></div>}
-          <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{if(!wF.itemId||!wF.qty)return;const it=stock.find(s=>String(s.id)===String(wF.itemId));setWaste(p=>[{...wF,id:Date.now(),cost:wac(it||{costHistory:[]})*(+wF.qty),qty:+wF.qty,itemName:it?.name||""},...p]);setWF({itemId:"",qty:"",reason:"",date:today()});setWShow(false);}} style={{...S.btn(T.red),flex:1}}>✅ บันทึก</button><button onClick={()=>setWShow(false)} style={S.ghost}>ยกเลิก</button></div>
+          <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{if(!wF.itemId||!wF.qty)return;const it=stock.find(s=>String(s.id)===String(wF.itemId));const newW={...wF,id:Date.now(),cost:wac(it||{costHistory:[]})*(+wF.qty),qty:+wF.qty,itemName:it?.name||""};setWaste(p=>[newW,...p]);if(window._dbReady)db.addWaste({id:newW.id,date:newW.date,item_id:newW.itemId,item_name:newW.itemName,qty:newW.qty,reason:newW.reason||"",cost:newW.cost}).catch(()=>{});setWF({itemId:"",qty:"",reason:"",date:today()});setWShow(false);}} style={{...S.btn(T.red),flex:1}}>✅ บันทึก</button><button onClick={()=>setWShow(false)} style={S.ghost}>ยกเลิก</button></div>
         </Card>}
         {(waste||[]).length===0&&<Card><div style={{color:T.textSm,textAlign:"center",padding:22}}>ยังไม่มี Waste</div></Card>}
         {[...(waste||[])].sort((a,b)=>b.date.localeCompare(a.date)).map(w=>(
@@ -660,7 +693,7 @@ function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,se
             <div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>มูลค่า (฿)</div><input type="number" value={pF.amount||""} onChange={e=>setPF(p=>({...p,amount:e.target.value}))} style={S.inp} /></div>
             <div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>วันที่</div><input type="date" value={pF.date} max={today()} onChange={e=>setPF(p=>({...p,date:e.target.value}))} style={S.inp} /></div>
           </div>
-          <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{if(!pF.name||!pF.amount)return;setPromos(p=>[{...pF,id:Date.now(),amount:+pF.amount},...p]);setPF({name:"",date:today(),amount:""});setPShow(false);}} style={{...S.btn(),flex:1}}>✅ บันทึก</button><button onClick={()=>setPShow(false)} style={S.ghost}>ยกเลิก</button></div>
+          <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{if(!pF.name||!pF.amount)return;const newP={...pF,id:Date.now(),amount:+pF.amount};setPromos(p=>[newP,...p]);if(window._dbReady)db.addPromo({id:newP.id,date:newP.date,name:newP.name,amount:newP.amount,note:newP.note||""}).catch(()=>{});setPF({name:"",date:today(),amount:""});setPShow(false);}} style={{...S.btn(),flex:1}}>✅ บันทึก</button><button onClick={()=>setPShow(false)} style={S.ghost}>ยกเลิก</button></div>
         </Card>}
         {(promos||[]).length===0&&<Card><div style={{color:T.textSm,textAlign:"center",padding:22}}>ยังไม่มีโปรโมชั่น</div></Card>}
         {[...(promos||[])].sort((a,b)=>b.date.localeCompare(a.date)).map(p=>(
@@ -1155,14 +1188,66 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
 
 export default function App(){
   const[user,setUser]=useState(null);const[page,setPage]=useState("dashboard");
-  const[stock,setStock]=useState(INIT_STOCK);const[cf,setCF]=useState([]);const[movements,setMovements]=useState([]);
-  const[staff,setStaff]=useState(INIT_STAFF);const[suppliers,setSuppliers]=useState(INIT_SUPS);
-  const[fixedCosts,setFixedCosts]=useState(INIT_FIXED);const[lineToken,setLineToken]=useState("");
-  const[waste,setWaste]=useState([]);const[promos,setPromos]=useState([]);const[attendance,setAttendance]=useState([]);
-  const[shopLat,setShopLat]=useState("");const[shopLng,setShopLng]=useState("");const[shopRadius,setShopRadius]=useState("200");
+  const[stock,setStock]=useState(()=>lsGet("tg_stock",INIT_STOCK));
+  const[cf,setCF]=useState(()=>lsGet("tg_cf",[]));
+  const[movements,setMovements]=useState(()=>lsGet("tg_mvs",[]));
+  const[staff,setStaff]=useState(()=>lsGet("tg_staff",INIT_STAFF));
+  const[suppliers,setSuppliers]=useState(()=>lsGet("tg_sups",INIT_SUPS));
+  const[fixedCosts,setFixedCosts]=useState(()=>lsGet("tg_fixed",INIT_FIXED));
+  const[lineToken,setLineToken]=useState(()=>lsGet("tg_line",""));
+  const[waste,setWaste]=useState(()=>lsGet("tg_waste",[]));
+  const[promos,setPromos]=useState(()=>lsGet("tg_promos",[]));
+  const[attendance,setAttendance]=useState(()=>lsGet("tg_att",[]));
+  const[shopLat,setShopLat]=useState(()=>lsGet("tg_slat",""));
+  const[shopLng,setShopLng]=useState(()=>lsGet("tg_slng",""));
+  const[shopRadius,setShopRadius]=useState(()=>lsGet("tg_srad","200"));
   const[dbReady,setDbReady]=useState(false);const[loading,setLoading]=useState(true);
 
-  useEffect(()=>{async function load(){setLoading(true);try{const[cfD,stD,mvD]=await Promise.all([db.getCF(),db.getStock(),db.getMvs()]);if(cfD?.length)setCF(cfD.map(r=>({id:r.id,date:r.date,flow:r.flow,cat:r.cat,itemName:r.item_name||"",amount:r.amount,method:r.method,note:r.note||"",branch:r.branch||"main",staffId:r.staff_id||"owner"})));if(stD?.length)setStock(stD.map(r=>({id:r.id,name:r.name,unit:r.unit,qty:r.qty,minQty:r.min_qty,dailyUse:r.daily_use,supplierId:r.supplier_id||1,costHistory:r.cost_history||[]})));if(mvD?.length)setMovements(mvD.map(r=>({id:r.id,itemId:r.item_id,type:r.type,qty:r.qty,unitCost:r.unit_cost||0,date:r.date,staffId:r.staff_id||"",note:r.note||"",branch:r.branch||"main"})));setDbReady(true);}catch{}setLoading(false);}load();},[]);
+  useEffect(()=>{async function load(){
+  setLoading(true);
+  try{
+    const[cfD,stD,mvD,attD,wasteD,promoD,setD]=await Promise.all([
+      db.getCF(),db.getStock(),db.getMvs(),db.getAtt(),db.getWaste(),db.getPromos(),db.getSettings()
+    ]);
+    if(cfD?.length)setCF(cfD.map(r=>({id:r.id,date:r.date,flow:r.flow,cat:r.cat,itemName:r.item_name||"",amount:r.amount,method:r.method,note:r.note||"",branch:r.branch||"main",staffId:r.staff_id||"owner"})));
+    if(stD?.length)setStock(stD.map(r=>({id:r.id,name:r.name,unit:r.unit,qty:r.qty,minQty:r.min_qty,dailyUse:r.daily_use,supplierId:r.supplier_id||1,costHistory:r.cost_history||[]})));
+    if(mvD?.length)setMovements(mvD.map(r=>({id:r.id,itemId:r.item_id,type:r.type,qty:r.qty,unitCost:r.unit_cost||0,date:r.date,staffId:r.staff_id||"",note:r.note||"",branch:r.branch||"main"})));
+    if(attD?.length)setAttendance(attD.map(r=>({id:r.id,staffId:r.staff_id,date:r.date,checkIn:r.check_in,checkOut:r.check_out||"",note:r.note||"",otOverride:r.ot_override})));
+    if(wasteD?.length)setWaste(wasteD.map(r=>({id:r.id,date:r.date,itemId:r.item_id||"",itemName:r.item_name||"",qty:r.qty,reason:r.reason||"",cost:r.cost||0})));
+    if(promoD?.length)setPromos(promoD.map(r=>({id:r.id,date:r.date,name:r.name,amount:r.amount,note:r.note||""})));
+    if(setD?.length){
+      setD.forEach(s=>{
+        try{
+          const v=JSON.parse(s.value);
+          if(s.key==="staff")setStaff(v);
+          else if(s.key==="suppliers")setSuppliers(v);
+          else if(s.key==="fixedCosts")setFixedCosts(v);
+          else if(s.key==="lineToken")setLineToken(v);
+          else if(s.key==="shopLat")setShopLat(v);
+          else if(s.key==="shopLng")setShopLng(v);
+          else if(s.key==="shopRadius")setShopRadius(v);
+        }catch{}
+      });
+    }
+    setDbReady(true);window._dbReady=true;
+  }catch(e){console.error("Load error:",e);}
+  setLoading(false);
+}load();},[]);
+
+  // Auto-save to localStorage (instant) + Supabase (sync)
+  useEffect(()=>lsSet("tg_stock",stock),[stock]);
+  useEffect(()=>lsSet("tg_cf",cf),[cf]);
+  useEffect(()=>lsSet("tg_mvs",movements),[movements]);
+  useEffect(()=>{lsSet("tg_staff",staff);if(dbReady)db.upsertSetting("staff",staff).catch(()=>{});},[staff,dbReady]);
+  useEffect(()=>{lsSet("tg_sups",suppliers);if(dbReady)db.upsertSetting("suppliers",suppliers).catch(()=>{});},[suppliers,dbReady]);
+  useEffect(()=>{lsSet("tg_fixed",fixedCosts);if(dbReady)db.upsertSetting("fixedCosts",fixedCosts).catch(()=>{});},[fixedCosts,dbReady]);
+  useEffect(()=>{lsSet("tg_line",lineToken);if(dbReady)db.upsertSetting("lineToken",lineToken).catch(()=>{});},[lineToken,dbReady]);
+  useEffect(()=>lsSet("tg_waste",waste),[waste]);
+  useEffect(()=>lsSet("tg_promos",promos),[promos]);
+  useEffect(()=>lsSet("tg_att",attendance),[attendance]);
+  useEffect(()=>{lsSet("tg_slat",shopLat);if(dbReady)db.upsertSetting("shopLat",shopLat).catch(()=>{});},[shopLat,dbReady]);
+  useEffect(()=>{lsSet("tg_slng",shopLng);if(dbReady)db.upsertSetting("shopLng",shopLng).catch(()=>{});},[shopLng,dbReady]);
+  useEffect(()=>{lsSet("tg_srad",shopRadius);if(dbReady)db.upsertSetting("shopRadius",shopRadius).catch(()=>{});},[shopRadius,dbReady]);
 
   const saveStock=useCallback(async ns=>{setStock(ns);if(dbReady)db.upsertStock(ns.map(s=>({id:s.id,name:s.name,unit:s.unit,qty:s.qty,min_qty:s.minQty,daily_use:s.dailyUse,supplier_id:s.supplierId||1,cost_history:s.costHistory||[]}))).catch(()=>{});},[dbReady]);
 
@@ -1178,7 +1263,7 @@ export default function App(){
       <div style={{display:"flex",flexDirection:"column",gap:9,width:"100%",maxWidth:310}}>
         <button onClick={()=>{if(window.confirm("ล้าง Cash Flow?")){{setCF([]);if(dbReady)db.clearCF().catch(()=>{});alert("เรียบร้อย");}}}} style={{...S.btn(T.red),padding:13,fontSize:15,width:"100%"}}>🗑 ล้าง Cash Flow</button>
         <button onClick={()=>{if(window.confirm("ล้างสต็อค?")){{setStock(INIT_STOCK);setMovements([]);if(dbReady)db.clearMvs().catch(()=>{});alert("เรียบร้อย");}}}} style={{...S.btn(T.orange),padding:13,fontSize:15,width:"100%"}}>🗑 ล้างสต็อค</button>
-        <button onClick={()=>{if(window.confirm("⚠️ ล้างทั้งหมด?")){{setCF([]);setStock(INIT_STOCK);setMovements([]);if(dbReady){db.clearCF().catch(()=>{});db.clearMvs().catch(()=>{});}alert("เรียบร้อย");}}}} style={{...S.btn(T.red),padding:13,fontSize:15,width:"100%",border:"2px solid #7f1d1d"}}>⚠️ ล้างทั้งหมด</button>
+        <button onClick={()=>{if(window.confirm("⚠️ ล้างทั้งหมด?")){{setCF([]);setStock(INIT_STOCK);setMovements([]);setWaste([]);setPromos([]);setAttendance([]);setWaste([]);setPromos([]);["tg_cf","tg_stock","tg_mvs","tg_waste","tg_promos","tg_att"].forEach(k=>localStorage.removeItem(k));if(dbReady){db.clearCF().catch(()=>{});db.clearMvs().catch(()=>{});db.clearAtt().catch(()=>{});db.clearWaste().catch(()=>{});db.clearPromos().catch(()=>{});}alert("เรียบร้อย");}}}} style={{...S.btn(T.red),padding:13,fontSize:15,width:"100%",border:"2px solid #7f1d1d"}}>⚠️ ล้างทั้งหมด</button>
         <button onClick={()=>setUser(null)} style={{...S.ghost,padding:13,fontSize:15,width:"100%"}}>← ออก</button>
       </div>
     </div>
