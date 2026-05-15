@@ -558,15 +558,15 @@ function PurchasePage({stock,suppliers,lineToken}){
 }
 
 function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,setPromos}){
-  const[tab,setTab]=useState("pl");const[wShow,setWShow]=useState(false);const[pShow,setPShow]=useState(false);const[wF,setWF]=useState({itemId:"",qty:"",reason:"",date:today()});const[pF,setPF]=useState({name:"",date:today(),amount:""});
+  const[tab,setTab]=useState(user.role==="owner"?"pl":"forecast");const[wShow,setWShow]=useState(false);const[pShow,setPShow]=useState(false);const[wF,setWF]=useState({itemId:"",qty:"",reason:"",date:today()});const[pF,setPF]=useState({name:"",date:today(),amount:""});
   const mk=today().slice(0,7);const myCF=user.role==="owner"?cf:cf.filter(e=>e.branch===user.franchiseId);const mCF=myCF.filter(e=>e.date.startsWith(mk));
   const mIn=mCF.filter(e=>e.flow==="in").reduce((a,b)=>a+b.amount,0);const mOut=mCF.filter(e=>e.flow==="out").reduce((a,b)=>a+b.amount,0);const totalFixed=fixedCosts.reduce((a,b)=>a+b.amount,0);const cogs=mCF.filter(e=>e.flow==="out"&&["วัตถุดิบ/ผัก","หมู/เนื้อ/ทะเล"].includes(e.cat)).reduce((a,b)=>a+b.amount,0);const netP=mIn-mOut-totalFixed;
   const costAna=stock.map(s=>{const h=s.costHistory||[];if(!h.length)return null;const avg=wac(s);const mid=Math.floor(h.length/2);const f=h.slice(0,mid).reduce((a,b)=>a+b.unitCost,0)/Math.max(mid,1);const sc=h.slice(mid).reduce((a,b)=>a+b.unitCost,0)/Math.max(h.length-mid,1);const trend=f>0?((sc-f)/f*100):0;const prices=h.map(x=>x.unitCost);const risk=trend>20?"high":trend>10?"medium":"low";return{s,avg,trend,risk,last3:h.slice(-3),maxP:Math.max(...prices),minP:Math.min(...prices)};}).filter(Boolean);
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Hdr title="📊 รายงาน" action={<IEBtn onExport={()=>{if(tab==="pl")exportXlsx([{เดือน:mk,รายรับ:mIn,รายจ่าย:mOut,กำไรสุทธิ:netP}],"P&L","pl");else if(tab==="waste")exportXlsx((waste||[]).map(w=>({วันที่:w.date,สินค้า:w.itemName,จำนวน:w.qty,มูลค่า:w.cost})),"waste","waste");else if(tab==="promo")exportXlsx((promos||[]).map(p=>({วันที่:p.date,โปร:p.name,มูลค่า:p.amount})),"promo","promo");else exportXlsx([],"data","report");}} onImport={rows=>{if(tab==="waste")setWaste(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),itemName:r["สินค้า"]||"",qty:+r["จำนวน"]||0,reason:"",cost:+r["มูลค่า"]||0,itemId:""}))]);else if(tab==="promo")setPromos(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),name:r["โปร"]||"",amount:+r["มูลค่า"]||0}))]);}} />{user.role==="owner"&&(tab==="waste"?<ClearBtn label="Waste ทั้งหมด" onClear={()=>setWaste([])} />:tab==="promo"?<ClearBtn label="โปรโมชั่นทั้งหมด" onClear={()=>setPromos([])} />:null)}} />
-      <Tabs tabs={[["pl","💰 P&L"],["cost","📈 ต้นทุน"],["forecast","🔮 พยากรณ์"],["waste","🗑 Waste"],["promo","🎁 โปร"]]} active={tab} onChange={setTab} />
-      {tab==="pl"&&<>
+      <Hdr title="📊 รายงาน" action={<IEBtn onExport={()=>{if(tab==="pl"&&user.role==="owner")exportXlsx([{เดือน:mk,รายรับ:mIn,รายจ่าย:mOut,กำไรสุทธิ:netP}],"P&L","pl");else if(tab==="waste")exportXlsx((waste||[]).map(w=>({วันที่:w.date,สินค้า:w.itemName,จำนวน:w.qty,มูลค่า:w.cost})),"waste","waste");else if(tab==="promo")exportXlsx((promos||[]).map(p=>({วันที่:p.date,โปร:p.name,มูลค่า:p.amount})),"promo","promo");else exportXlsx([],"data","report");}} onImport={rows=>{if(tab==="waste")setWaste(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),itemName:r["สินค้า"]||"",qty:+r["จำนวน"]||0,reason:"",cost:+r["มูลค่า"]||0,itemId:""}))]);else if(tab==="promo")setPromos(p=>[...p,...rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),name:r["โปร"]||"",amount:+r["มูลค่า"]||0}))]);}} />{user.role==="owner"&&(tab==="waste"?<ClearBtn label="Waste ทั้งหมด" onClear={()=>setWaste([])} />:tab==="promo"?<ClearBtn label="โปรโมชั่นทั้งหมด" onClear={()=>setPromos([])} />:null)}} />
+      <Tabs tabs={[...(user.role==="owner"?[["pl","💰 P&L"],["cost","📈 ต้นทุน"]]:[]),(["forecast","🔮 พยากรณ์"]),["waste","🗑 Waste"],["promo","🎁 โปร"]].flat().filter(Boolean)} active={tab} onChange={setTab} />
+      {tab==="pl"&&user.role==="owner"&&<>
         <Card style={{background:T.orangeLt,borderColor:T.borderOr}}>
           <div style={{color:T.orange,fontWeight:700,fontSize:13,marginBottom:9}}>เดือน {mk}</div>
           {[["💰 รายรับ",mIn,T.green,false],["− วัตถุดิบ",cogs,T.red,true],["= กำไรขั้นต้น",mIn-cogs,T.green,false],["− ค่าใช้จ่าย",mOut-cogs+totalFixed,T.yellow,true],["= กำไรสุทธิ",netP,netP>=0?T.green:T.red,false]].map(([l,v,c2,i])=>(
@@ -588,7 +588,7 @@ function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,se
           {stock.every(s=>stockSt(s)==="ok")&&<div style={{color:T.green,textAlign:"center",padding:12}}>✅ สต็อคปกติ</div>}
         </Card>
       </>}
-      {tab==="cost"&&<Card>
+      {tab==="cost"&&user.role==="owner"&&<Card>
         <div style={{fontWeight:800,fontSize:14,marginBottom:10}}>📈 ต้นทุนแต่ละสินค้า</div>
         {costAna.length===0&&<div style={{color:T.textSm,textAlign:"center",padding:20}}>ยังไม่มีข้อมูลราคา (กรอกราคาตอนรับสินค้าเข้า)</div>}
         {costAna.map(({s,avg,trend,risk,last3})=>(
