@@ -671,6 +671,107 @@ function ReportPage({cf,stock,movements,user,fixedCosts,waste,setWaste,promos,se
   );
 }
 
+function StaffCheckinPage({user,attendance,setAttendance,shopLat,shopLng,shopRadius}){
+  const[loading,setLoading]=useState(false);
+  const[status,setStatus]=useState(null); // {ok,msg,type}
+  const[locErr,setLocErr]=useState("");
+  const nowFn=()=>new Date().toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+  const todayStr=today();
+  const myAtt=attendance.find(a=>a.staffId===user.id&&a.date===todayStr);
+  const dist=(la1,lo1,la2,lo2)=>{const R=6371000;const dLat=(la2-la1)*Math.PI/180;const dLon=(lo2-lo1)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));};
+
+  const stamp=async type=>{
+    setLoading(true);setLocErr("");setStatus(null);
+    try{
+      const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,enableHighAccuracy:true}));
+      const{latitude:lat,longitude:lng,accuracy:acc}=pos.coords;
+      if(shopLat&&shopLng){
+        const d=dist(lat,lng,+shopLat,+shopLng);
+        const r=+(shopRadius||200);
+        if(d>r+acc){setLocErr(`❌ คุณอยู่ห่างจากร้าน ${Math.round(d)}m (รัศมี ${r}m)
+ต้องอยู่ในบริเวณร้านถึงจะเช็คเวลาได้`);setLoading(false);return;}
+      }
+      const t=nowFn();
+      const note=`📍 ${lat.toFixed(5)},${lng.toFixed(5)} ±${Math.round(acc)}m`;
+      if(type==="in"){
+        if(myAtt&&!myAtt.checkOut){setLocErr("⚠️ เช็คอินวันนี้แล้ว");setLoading(false);return;}
+        const newAtt={id:Date.now(),staffId:user.id,date:todayStr,checkIn:t,checkOut:"",note};
+        setAttendance(p=>[...p,newAtt]);
+        // sync to supabase
+        sb("attendance",{method:"POST",body:JSON.stringify({id:newAtt.id,staff_id:user.id,date:todayStr,check_in:t,check_out:"",note,lat_in:lat.toFixed(5),lng_in:lng.toFixed(5)})}).catch(()=>{});
+        setStatus({ok:true,type:"in",msg:`เช็คอินสำเร็จ ${t} น.`});
+      } else {
+        if(!myAtt||myAtt.checkOut){setLocErr("⚠️ ยังไม่ได้เช็คอินวันนี้");setLoading(false);return;}
+        setAttendance(p=>p.map(a=>a.id===myAtt.id?{...a,checkOut:t}:a));
+        sb(`attendance?id=eq.${myAtt.id}`,{method:"PATCH",body:JSON.stringify({check_out:t,lat_out:lat.toFixed(5),lng_out:lng.toFixed(5)})}).catch(()=>{});
+        setStatus({ok:true,type:"out",msg:`เช็คออกสำเร็จ ${t} น.`});
+      }
+    }catch(e){
+      setLocErr(e.code===1?"❌ กรุณาอนุญาต GPS ก่อนเช็คเวลา":"❌ ดึง GPS ไม่ได้ ลองใหม่อีกครั้ง");
+    }
+    setLoading(false);
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div><div style={{fontSize:22,fontWeight:900}}>📲 เช็คเข้า-ออกงาน</div><div style={{color:T.textSm,fontSize:14}}>สวัสดี {user.name} • {todayStr}</div></div>
+
+      {/* สถานะวันนี้ */}
+      <Card style={{borderColor:myAtt?.checkIn?myAtt.checkOut?T.green+"44":T.orange+"44":T.border,background:myAtt?.checkIn?myAtt.checkOut?T.greenLt:T.orangeLt:"#fff"}}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>📋 สถานะวันนี้</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{color:T.textSm,fontSize:12,marginBottom:4}}>⏰ เข้างาน</div>
+            <div style={{fontWeight:900,fontSize:26,color:myAtt?.checkIn?T.green:T.textXs}}>{myAtt?.checkIn||"--:--"}</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{color:T.textSm,fontSize:12,marginBottom:4}}>🏁 ออกงาน</div>
+            <div style={{fontWeight:900,fontSize:26,color:myAtt?.checkOut?T.red:T.textXs}}>{myAtt?.checkOut||"--:--"}</div>
+          </div>
+        </div>
+        {myAtt?.checkIn&&!myAtt.checkOut&&<div style={{textAlign:"center",marginTop:8,color:T.orange,fontWeight:600,fontSize:13}}>🟡 กำลังทำงานอยู่</div>}
+        {myAtt?.checkOut&&<div style={{textAlign:"center",marginTop:8,color:T.green,fontWeight:600,fontSize:13}}>✅ ออกงานแล้ววันนี้</div>}
+        {!myAtt?.checkIn&&<div style={{textAlign:"center",marginTop:8,color:T.textSm,fontSize:13}}>ยังไม่ได้เช็คอินวันนี้</div>}
+        {myAtt?.note&&<div style={{marginTop:6,color:T.textXs,fontSize:11,textAlign:"center"}}>{myAtt.note}</div>}
+      </Card>
+
+      {/* แจ้งเตือนพิกัด */}
+      {!shopLat&&<div style={{background:T.yellowLt,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.yellow,fontWeight:600}}>⚠️ เจ้าของยังไม่ได้ตั้งพิกัดร้าน — เช็คเวลาได้แต่ไม่ตรวจสอบระยะทาง</div>}
+      {shopLat&&shopLng&&<div style={{background:T.greenLt,borderRadius:10,padding:"8px 14px",fontSize:12,color:T.green,fontWeight:600}}>📍 ระบบจะตรวจสอบว่าอยู่ในรัศมี {shopRadius||200}m ของร้าน</div>}
+
+      {/* Error */}
+      {locErr&&<div style={{background:T.redLt,border:`1px solid ${T.red}33`,borderRadius:10,padding:"12px 14px",fontSize:14,color:T.red,fontWeight:600,whiteSpace:"pre-line"}}>{locErr}</div>}
+
+      {/* Success */}
+      {status?.ok&&<div style={{background:status.type==="in"?T.greenLt:T.orangeLt,border:`1px solid ${status.type==="in"?T.green:T.orange}44`,borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:8}}>{status.type==="in"?"✅":"👋"}</div>
+        <div style={{fontWeight:800,fontSize:18,color:status.type==="in"?T.green:T.orange}}>{status.msg}</div>
+      </div>}
+
+      {/* ปุ่มเช็คอิน/ออก */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <button onClick={()=>{setStatus(null);stamp("in");}} disabled={loading||!!(myAtt?.checkIn&&!myAtt?.checkOut)}
+          style={{background:loading?"#a1a1aa":myAtt?.checkIn&&!myAtt?.checkOut?"#86efac":T.green,color:"#fff",border:"none",borderRadius:14,padding:"18px 20px",fontSize:20,fontWeight:800,cursor:loading||!!(myAtt?.checkIn&&!myAtt?.checkOut)?"default":"pointer",fontFamily:F,boxShadow:`0 4px 12px ${T.green}33`,opacity:myAtt?.checkIn&&!myAtt?.checkOut?0.6:1}}>
+          {loading?"⏳ กำลังตรวจสอบ GPS...":myAtt?.checkIn&&!myAtt?.checkOut?"✅ เช็คอินแล้ว":"📥 เข้างาน (Check-in)"}
+        </button>
+        <button onClick={()=>{setStatus(null);stamp("out");}} disabled={loading||!!myAtt?.checkOut||!myAtt?.checkIn}
+          style={{background:loading?"#a1a1aa":myAtt?.checkOut?"#fca5a5":T.red,color:"#fff",border:"none",borderRadius:14,padding:"18px 20px",fontSize:20,fontWeight:800,cursor:loading||!!myAtt?.checkOut||!myAtt?.checkIn?"default":"pointer",fontFamily:F,boxShadow:`0 4px 12px ${T.red}33`,opacity:!myAtt?.checkIn||myAtt?.checkOut?0.5:1}}>
+          {loading?"⏳ กำลังตรวจสอบ GPS...":myAtt?.checkOut?"✅ ออกงานแล้ว":"📤 ออกงาน (Check-out)"}
+        </button>
+      </div>
+
+      <div style={{color:T.textXs,fontSize:11,textAlign:"center"}}>กดปุ่มแล้วระบบจะขอ GPS อัตโนมัติ • เวลาถูกบันทึกและส่งเจ้าของทันที</div>
+      <div style={{marginTop:8,paddingTop:14,borderTop:`1px dashed ${T.border}`}}>
+        <div style={{color:T.textXs,fontSize:11,textAlign:"center",marginBottom:8}}>🧪 โหมดทดสอบระบบ</div>
+        <button onClick={()=>{if(!window.confirm("ล้างประวัติการเข้างานวันนี้?\n(ใช้สำหรับทดสอบระบบเท่านั้น)"))return;setAttendance(p=>p.filter(a=>!(a.staffId===user.id&&a.date===todayStr)));setStatus(null);setLocErr("");}} style={{width:"100%",background:"transparent",border:`1px dashed ${T.textXs}`,borderRadius:10,padding:"9px 14px",color:T.textSm,cursor:"pointer",fontSize:13,fontFamily:F}}>
+          🗑 ล้างประวัติวันนี้ (เทสระบบ)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng}){
   const[tab,setTab]=useState("checkin");const[selStaff,setSelStaff]=useState("");const[salaryMonth,setSalaryMonth]=useState(today().slice(0,7));const[editHrId,setEditHrId]=useState(null);const[hrEdit,setHrEdit]=useState({});const[editOtId,setEditOtId]=useState(null);const[otVal,setOtVal]=useState("");
   const workers=staff.filter(s=>s.role==="staff"&&s.active);
@@ -924,6 +1025,7 @@ export default function App(){
     {id:"settings",icon:"⚙️",label:"ตั้งค่า"},
   ]:[
     {id:"dashboard",icon:"🏠",label:"หลัก"},
+    {id:"staffcheckin",icon:"📲",label:"เช็คเวลา"},
     ...(p.cashflow?[{id:"cashflow",icon:"💵",label:"Cash Flow"}]:[]),
     ...(p.stock?[{id:"staffstock",icon:"📦",label:"สต็อค"}]:[]),
     ...(p.purchase?[{id:"purchase",icon:"🛒",label:"สั่งซื้อ"}]:[]),
@@ -932,6 +1034,7 @@ export default function App(){
   ];
 
   const pages={
+    staffcheckin:<StaffCheckinPage user={user} attendance={attendance} setAttendance={setAttendance} shopLat={shopLat} shopLng={shopLng} shopRadius={shopRadius} />,
     dashboard:<DashboardPage cf={cf} stock={stock} user={user} fixedCosts={fixedCosts} waste={waste} promos={promos} setPage={setPage} />,
     cashflow:<CashflowPage cf={cf} setCF={setCF} user={user} dbReady={dbReady} />,
     stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} />,
