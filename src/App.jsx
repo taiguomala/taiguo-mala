@@ -761,12 +761,23 @@ function StaffCheckinPage({user,attendance,setAttendance,shopLat,shopLng,shopRad
       </div>
 
       <div style={{color:T.textXs,fontSize:11,textAlign:"center"}}>กดปุ่มแล้วระบบจะขอ GPS อัตโนมัติ • เวลาถูกบันทึกและส่งเจ้าของทันที</div>
-      <div style={{marginTop:8,paddingTop:14,borderTop:`1px dashed ${T.border}`}}>
-        <div style={{color:T.textXs,fontSize:11,textAlign:"center",marginBottom:8}}>🧪 โหมดทดสอบระบบ</div>
-        <button onClick={()=>{if(!window.confirm("ล้างประวัติการเข้างานวันนี้?\n(ใช้สำหรับทดสอบระบบเท่านั้น)"))return;setAttendance(p=>p.filter(a=>!(a.staffId===user.id&&a.date===todayStr)));setStatus(null);setLocErr("");}} style={{width:"100%",background:"transparent",border:`1px dashed ${T.textXs}`,borderRadius:10,padding:"9px 14px",color:T.textSm,cursor:"pointer",fontSize:13,fontFamily:F}}>
-          🗑 ล้างประวัติวันนี้ (เทสระบบ)
-        </button>
-      </div>
+      {user.role==="owner"&&(
+        <div style={{marginTop:10,paddingTop:14,borderTop:`1px dashed ${T.border}`}}>
+          <div style={{color:T.textXs,fontSize:11,textAlign:"center",marginBottom:10}}>🧪 ล้างประวัติการเข้างาน (เจ้าของเท่านั้น)</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            {[
+              ["วันนี้",()=>setAttendance(p=>p.filter(a=>a.date!==todayStr))],
+              ["เดือนนี้",()=>setAttendance(p=>p.filter(a=>!a.date.startsWith(todayStr.slice(0,7))))],
+              ["ปีนี้",()=>setAttendance(p=>p.filter(a=>!a.date.startsWith(todayStr.slice(0,4))))],
+            ].map(([label,fn])=>(
+              <button key={label} onClick={()=>{if(!window.confirm(`ล้างประวัติการเข้างาน${label}ทั้งหมด?\nข้อมูลจะหายถาวร`))return;fn();setStatus(null);setLocErr("");}}
+                style={{background:"transparent",border:`1px dashed ${T.red}`,borderRadius:9,padding:"8px 4px",color:T.red,cursor:"pointer",fontSize:12,fontFamily:F,textAlign:"center"}}>
+                🗑 {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
