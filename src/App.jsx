@@ -783,43 +783,6 @@ function StaffCheckinPage({user,attendance,setAttendance,shopLat,shopLng,shopRad
 }
 
 
-function QRCodeDisplay({staff,staffId}){
-  const s=staff.find(x=>x.id===staffId);if(!s)return null;
-  const url=`${window.location.origin}${window.location.pathname}?sid=${s.id}`;
-  const qr=`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
-  return(
-    <div style={{textAlign:"center",padding:12}}>
-      <div style={{background:"#fff",padding:12,borderRadius:14,border:`2px solid ${T.orange}`,display:"inline-block"}}>
-        <img src={qr} alt="QR" style={{width:160,height:160,display:"block"}} />
-        <div style={{fontWeight:800,fontSize:15,marginTop:6}}>{s.name}</div>
-        <div style={{color:T.textSm,fontSize:11}}>สแกนเพื่อเช็คเวลา</div>
-      </div>
-      <div style={{marginTop:8,fontSize:11,color:T.textSm,wordBreak:"break-all"}}>{url}</div>
-    </div>
-  );
-}
-
-
-function QRCodeDisplay({staff,staffId,onCheckIn,onCheckOut}){
-  const s=staff.find(x=>x.id===staffId);if(!s)return null;
-  const url=`${window.location.origin}${window.location.pathname}?sid=${s.id}`;
-  const qr=`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
-  return(
-    <div style={{textAlign:"center",padding:12}}>
-      <div style={{background:"#fff",padding:12,borderRadius:14,border:`2px solid ${T.orange}`,display:"inline-block"}}>
-        <img src={qr} alt="QR" style={{width:160,height:160,display:"block"}} />
-        <div style={{fontWeight:800,fontSize:15,marginTop:6}}>{s.name}</div>
-        <div style={{color:T.textSm,fontSize:11}}>สแกนเปิดหน้าเช็คเวลา</div>
-      </div>
-      <div style={{marginTop:8,fontSize:11,color:T.textSm,wordBreak:"break-all"}}>{url}</div>
-      <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:7,flexWrap:"wrap"}}>
-        <button onClick={()=>window.open(url,"_blank")} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>🔗 เปิด URL</button>
-        <button onClick={()=>window.print()} style={{...S.ghost,fontSize:12,padding:"5px 10px"}}>🖨 พิมพ์ QR</button>
-        <button onClick={()=>onCheckIn(staffId)} style={{...S.btn(T.green),fontSize:12,padding:"5px 10px"}}>📥 บันทึกเข้า</button>
-        <button onClick={()=>onCheckOut(staffId)} style={{...S.btn(T.red),fontSize:12,padding:"5px 10px"}}>📤 บันทึกออก</button>
-      </div>
-  );
-}
 
 
 function QRDisplay({staff,staffId,onIn,onOut}){
