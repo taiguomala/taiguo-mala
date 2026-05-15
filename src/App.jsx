@@ -1028,12 +1028,12 @@ export default function App(){
     {id:"settings",icon:"⚙️",label:"ตั้งค่า"},
   ]:[
     {id:"dashboard",icon:"🏠",label:"หลัก"},
-    {id:"staffcheckin",icon:"📲",label:"เช็คเวลา"},
     ...(p.cashflow?[{id:"cashflow",icon:"💵",label:"Cash Flow"}]:[]),
     ...(p.stock?[{id:"staffstock",icon:"📦",label:"สต็อค"}]:[]),
     ...(p.purchase?[{id:"purchase",icon:"🛒",label:"สั่งซื้อ"}]:[]),
     ...(p.report?[{id:"report",icon:"📊",label:"รายงาน"}]:[]),
     ...(p.admin?[{id:"settings",icon:"⚙️",label:"ตั้งค่า"}]:[]),
+    {id:"staffcheckin",icon:"📲",label:"เช็คเวลา"},
   ];
 
   const pages={
