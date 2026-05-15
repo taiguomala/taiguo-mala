@@ -780,8 +780,9 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
         {staff.filter(s=>s.id!=="owner"&&s.id!=="emergency").map(s=>(
           <Card key={s.id} style={{borderColor:s.active?T.border:T.red+"33"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-              <div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>{s.name}</div>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}><span style={{color:T.textSm,fontSize:12}}>PIN:</span><input maxLength={4} value={s.pin} onChange={e=>setStaff(p=>p.map(x=>x.id===s.id?{...x,pin:e.target.value.replace(/\D/,"")}:x))} style={{...S.inp,width:72,fontSize:15,letterSpacing:4,textAlign:"center",padding:"3px 7px"}} /></div>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{color:T.textSm,fontSize:12}}>ชื่อ:</span><input value={s.name} onChange={e=>setStaff(p=>p.map(x=>x.id===s.id?{...x,name:e.target.value}:x))} style={{...S.inp,flex:1,fontSize:14,padding:"3px 8px"}} placeholder="ชื่อพนักงาน" /></div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{color:T.textSm,fontSize:12}}>PIN:</span><input maxLength={4} value={s.pin} onChange={e=>setStaff(p=>p.map(x=>x.id===s.id?{...x,pin:e.target.value.replace(/\D/,"")}:x))} style={{...S.inp,width:72,fontSize:15,letterSpacing:4,textAlign:"center",padding:"3px 7px"}} /></div>
               </div>
               <button onClick={()=>setStaff(p=>p.map(x=>x.id===s.id?{...x,active:!x.active}:x))} style={{background:s.active?T.greenLt:T.redLt,border:`1px solid ${s.active?T.green:T.red}44`,borderRadius:8,padding:"5px 10px",color:s.active?T.green:T.red,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:F}}>{s.active?"ใช้งาน":"ระงับ"}</button>
             </div>
