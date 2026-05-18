@@ -608,6 +608,7 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
           {[["ชื่อ","name","text"],["หน่วย","unit","text"],["จำนวน","qty","number"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
             <div key={k}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>{l}</div><input type={t} value={newItem[k]} onChange={e=>setNewItem(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
           ))}
+          {canPrice&&<div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>💰 ราคาต้นทุน/หน่วย</div><input type="number" value={newItem.initCost||""} onChange={e=>setNewItem(p=>({...p,initCost:e.target.value}))} style={{...S.inp,borderColor:T.orange}} placeholder="0" /></div>}
           <div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>หมวด (Category)</div>
             <select value={newItem.category} onChange={e=>setNewItem(p=>({...p,category:e.target.value}))} style={{...S.inp,height:42}}>
               <option value="">— เลือกหมวด —</option>
@@ -620,8 +621,18 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
             </select>
           </div>
         </div>
+        {canPrice&&newItem.initCost&&+newItem.initCost>0&&+newItem.qty>0&&<div style={{background:T.orangeLt,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.orange,marginTop:8}}>
+          มูลค่าเริ่มต้น: <b>฿{fmt(+newItem.initCost * +newItem.qty)}</b> (฿{(+newItem.initCost).toFixed(2)} × {newItem.qty} {newItem.unit||"หน่วย"})
+        </div>}
         <div style={{display:"flex",gap:8,marginTop:10}}>
-          <button onClick={()=>{setStock([...stock,{...newItem,id:Date.now(),qty:+newItem.qty,minQty:+newItem.minQty,dailyUse:+newItem.dailyUse,supplierId:+newItem.supplierId,costHistory:[]}]);setShowAdd(false);}} style={{...S.btn(),flex:1}}>บันทึก</button>
+          <button onClick={()=>{
+            const uc=canPrice&&newItem.initCost?+newItem.initCost:0;
+            const q=+newItem.qty||0;
+            const initHistory=uc>0&&q>0?[{date:today(),unitCost:uc,qty:q,total:uc*q}]:[];
+            setStock([...stock,{...newItem,id:Date.now(),qty:q,minQty:+newItem.minQty,dailyUse:+newItem.dailyUse,supplierId:+newItem.supplierId,costHistory:initHistory}]);
+            setNewItem({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1,category:"",initCost:""});
+            setShowAdd(false);
+          }} style={{...S.btn(),flex:1}}>บันทึก</button>
           <button onClick={()=>setShowAdd(false)} style={S.ghost}>ยกเลิก</button>
         </div>
       </Card>}
