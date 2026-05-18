@@ -54,11 +54,16 @@ const stockSt=s=>s.qty<=0?"out":s.qty<s.minQty*.5?"critical":s.qty<s.minQty?"low
 const ST_C={ok:T.green,low:T.yellow,critical:T.red,out:T.red};
 const ST_L={ok:"ปกติ",low:"ใกล้หมด",critical:"น้อยมาก",out:"หมด"};
 const wac=s=>{const h=s.costHistory||[];const q=h.reduce((a,b)=>a+b.qty,0);return q>0?h.reduce((a,b)=>a+b.total,0)/q:0;};
+const STOCK_CATS=["หมู/เนื้อ","ทะเล","ผัก/เต้าหู้","ซอส/เครื่องปรุง","แป้ง/เส้น","เครื่องดื่ม","บรรจุภัณฑ์","อื่นๆ"];
+// คำนวณความผันผวน (std deviation / mean × 100)
+const costVolatility=s=>{const h=s.costHistory||[];if(h.length<3)return 0;const prices=h.map(x=>x.unitCost);const mean=prices.reduce((a,b)=>a+b,0)/prices.length;if(mean===0)return 0;const variance=prices.reduce((a,b)=>a+(b-mean)**2,0)/prices.length;return(Math.sqrt(variance)/mean)*100;};
+// ต้นทุนล่าสุดสูงกว่า WAC กี่ %
+const costTrend=s=>{const h=s.costHistory||[];if(h.length<2)return 0;const last=h[h.length-1]?.unitCost||0;const avg=wac(s);return avg>0?((last-avg)/avg)*100:0;};
 const exportXlsx=(rows,sheet,file)=>{const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,sheet);XLSX.writeFile(wb,`${file}_${today()}.xlsx`);};
 const readXlsx=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:"array"});res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));}catch(e){rej(e);}};r.onerror=rej;r.readAsArrayBuffer(file);});
 const calcOT=(out,rate=50)=>{if(!out)return{m:0,p:0};const[sh,sm]="21:00".split(":").map(Number);const[oh,om]=out.split(":").map(Number);const raw=(oh*60+om)-(sh*60+sm);if(raw<=0)return{m:0,p:0};const rounded=Math.floor(raw/30)*30;return{m:rounded,p:rounded>0?(rounded/60)*rate:0};};
 
-const INIT_STOCK=[{id:1,name:"หมูสามชั้น",unit:"kg",qty:15,minQty:5,dailyUse:3,supplierId:2,costHistory:[]},{id:2,name:"กุ้งแวนนาไม",unit:"kg",qty:3,minQty:4,dailyUse:2,supplierId:3,costHistory:[]},{id:3,name:"เต้าหู้ขาว",unit:"kg",qty:10,minQty:5,dailyUse:2,supplierId:1,costHistory:[]},{id:4,name:"ผักกาดขาว",unit:"kg",qty:2,minQty:3,dailyUse:2,supplierId:1,costHistory:[]},{id:5,name:"น้ำซุปมาล่า",unit:"ถุง",qty:20,minQty:8,dailyUse:4,supplierId:4,costHistory:[]},{id:6,name:"วุ้นเส้น",unit:"kg",qty:5,minQty:3,dailyUse:1,supplierId:1,costHistory:[]}];
+const INIT_STOCK=[{id:1,name:"หมูสามชั้น",unit:"kg",qty:15,minQty:5,dailyUse:3,supplierId:2,category:"หมู/เนื้อ",costHistory:[]},{id:2,name:"กุ้งแวนนาไม",unit:"kg",qty:3,minQty:4,dailyUse:2,supplierId:3,category:"ทะเล",costHistory:[]},{id:3,name:"เต้าหู้ขาว",unit:"kg",qty:10,minQty:5,dailyUse:2,supplierId:1,category:"ผัก/เต้าหู้",costHistory:[]},{id:4,name:"ผักกาดขาว",unit:"kg",qty:2,minQty:3,dailyUse:2,supplierId:1,category:"ผัก/เต้าหู้",costHistory:[]},{id:5,name:"น้ำซุปมาล่า",unit:"ถุง",qty:20,minQty:8,dailyUse:4,supplierId:4,category:"ซอส/เครื่องปรุง",costHistory:[]},{id:6,name:"วุ้นเส้น",unit:"kg",qty:5,minQty:3,dailyUse:1,supplierId:1,category:"แป้ง/เส้น",costHistory:[]}];
 const INIT_SUPS=[{id:1,name:"ตลาดสดนครชัย",type:"ผัก",phone:"081-234-5678",active:true,_codeIndex:0},{id:2,name:"ฟาร์มหมูสยาม",type:"หมู",phone:"082-345-6789",active:true,_codeIndex:1},{id:3,name:"อาหารทะเลสด",type:"ทะเล",phone:"083-456-7890",active:true,_codeIndex:2},{id:4,name:"ซอสมาล่าพรีเมียม",type:"ซอส",phone:"084-567-8901",active:true,_codeIndex:3}];
 const INIT_STAFF=[
   {id:"owner",name:"DR.Fresh (เจ้าของ)",pin:"1234",role:"owner",active:true,perms:{cashflow:true,stock:true,purchase:true,report:true,admin:true,viewPrice:true,viewFinance:true},hr:{wage:0,wageType:"day",otPerHour:50,shiftStart:"09:00",shiftEnd:"18:00",bonusPct:0}},
@@ -246,12 +251,15 @@ function DashboardPage({cf,stock,user,fixedCosts,waste,promos,setPage}){
         </Card>
       )}
       <Card>
-        <div style={{fontWeight:700,fontSize:15,marginBottom:10}}>📦 สถานะสต็อค</div>
-        {stock.map(s=>{const st=stockSt(s);const pct=s.minQty>0?Math.min((s.qty/s.minQty)*100,200):100;return(
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontWeight:700,fontSize:15}}>📦 สถานะสต็อค</div>
+          {showFin&&(()=>{const tv=stock.reduce((s,x)=>{const av=wac(x);return s+(av>0?av*x.qty:0);},0);return tv>0?<div style={{background:T.orangeLt,borderRadius:8,padding:"4px 10px",fontSize:13}}><span style={{color:T.textSm}}>มูลค่ารวม </span><span style={{color:T.orange,fontWeight:800}}>฿{fmt(tv)}</span></div>:null;})()}
+        </div>
+        {stock.map(s=>{const st=stockSt(s);const pct=s.minQty>0?Math.min((s.qty/s.minQty)*100,200):100;const sv=wac(s)*s.qty;return(
           <div key={s.id} style={{marginBottom:11}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
               <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:14,fontWeight:600}}>{s.name}</span><Badge status={st} /></div>
-              <span style={{color:ST_C[st],fontWeight:700,fontSize:14}}>{s.qty} {s.unit}</span>
+              <div style={{textAlign:"right"}}><span style={{color:ST_C[st],fontWeight:700,fontSize:14}}>{s.qty} {s.unit}</span>{showFin&&sv>0&&<div style={{color:T.orange,fontSize:11}}>฿{fmt(sv)}</div>}</div>
             </div>
             <div style={{background:T.bg,borderRadius:4,height:6}}><div style={{background:pct<50?T.red:pct<100?T.yellow:T.green,width:`${Math.min(pct,100)}%`,height:"100%",borderRadius:4}}/></div>
           </div>
@@ -403,8 +411,9 @@ function CashflowPage({cf,setCF,user,dbReady}){
 }
 
 function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
-  const[tab,setTab]=useState("list");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1});
+  const[tab,setTab]=useState("list");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1,category:""});
   const[search,setSearch]=useState("");
+  const[catView,setCatView]=useState("total"); // "total"|"category"|"supplier"|"status"
   const canPrice=user.perms?.viewPrice;const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
   const showMsg=(t,ok)=>{setMsg({t,ok});setTimeout(()=>setMsg({t:"",ok:false}),3000);};
   const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}const uc=parseFloat(cost)||0;const nh=mvType==="in"&&uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:q,total:uc*q}]:item.costHistory;setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q,costHistory:nh}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:uc,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setCost("");setNote("");};
@@ -419,12 +428,76 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
         {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{setStock(INIT_STOCK);setMovements([]);}} />}
         <button onClick={()=>setShowAdd(!showAdd)} style={S.btn()}>+ เพิ่ม</button>
       </div>} />
+      {user.role==="owner"&&(()=>{
+        const totalVal=stock.reduce((s,x)=>{const av=wac(x);return s+(av>0?av*x.qty:0);},0);
+        const noPriceCount=stock.filter(s=>wac(s)===0&&s.qty>0).length;
+        const byCategory={};stock.forEach(s=>{const cat=s.category||"ไม่ระบุหมวด";if(!byCategory[cat])byCategory[cat]={items:[],val:0};const v=wac(s)*s.qty;byCategory[cat].items.push(s);byCategory[cat].val+=v;});
+        const bySup={};stock.forEach(s=>{const sup=suppliers.find(x=>x.id===s.supplierId);const key=sup?.id||0;const label=sup?supDisplay(sup,true):"ไม่ระบุ";if(!bySup[key])bySup[key]={label,val:0,items:[]};const v=wac(s)*s.qty;bySup[key].items.push(s);bySup[key].val+=v;});
+        const CC=["#f97316","#2563eb","#16a34a","#dc2626","#7c3aed","#0891b2","#d97706","#be185d"];
+        return(<Card style={{padding:"16px 18px",borderColor:T.borderOr}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+            <div><div style={{color:T.orange,fontWeight:700,fontSize:13}}>💎 มูลค่าสต็อครวม</div><div style={{color:T.orange,fontWeight:900,fontSize:30,lineHeight:1.1}}>฿{fmt(totalVal)}</div>{noPriceCount>0&&<div style={{color:T.textXs,fontSize:11,marginTop:2}}>⚠️ {noPriceCount} รายการยังไม่มีราคา</div>}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
+              {[["total","รวม"],["category","หมวด"],["supplier","ซัพฯ"],["status","สถานะ"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setCatView(v)} style={{fontSize:11,padding:"3px 10px",borderRadius:6,cursor:"pointer",fontFamily:F,background:catView===v?T.orange:"transparent",border:`1px solid ${catView===v?T.orange:T.border}`,color:catView===v?"#fff":T.textMd,fontWeight:catView===v?700:400}}>{l}</button>
+              ))}
+            </div>
+          </div>
+          {catView==="total"&&(()=>{const top=[...stock].filter(s=>wac(s)>0&&s.qty>0).sort((a,b)=>wac(b)*b.qty-wac(a)*a.qty);return(<>
+            <div style={{color:T.textSm,fontSize:12,marginBottom:6,fontWeight:600}}>Top สินค้ามูลค่าสูงสุด</div>
+            {top.slice(0,8).map((s,i)=>{const v=wac(s)*s.qty;const pct=totalVal>0?(v/totalVal*100):0;return(<div key={s.id} style={{marginBottom:7}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:2}}><span style={{fontWeight:600}}>{i+1}. {s.name}</span><span style={{color:T.orange,fontWeight:700}}>฿{fmt(v)} <span style={{color:T.textXs,fontWeight:400}}>({pct.toFixed(1)}%)</span></span></div>
+              <div style={{background:T.bg,borderRadius:3,height:5}}><div style={{background:T.orange,width:`${pct}%`,height:"100%",borderRadius:3}}/></div>
+            </div>);})}
+            {top.length===0&&<div style={{color:T.textSm,fontSize:13,textAlign:"center",padding:12}}>ยังไม่มีราคาสินค้า — กรอกราคาตอนรับสินค้าเข้า</div>}
+          </>)})()}
+          {catView==="category"&&(()=>{const cats=Object.entries(byCategory).sort((a,b)=>b[1].val-a[1].val);return(<>
+            <div style={{color:T.textSm,fontSize:12,marginBottom:8,fontWeight:600}}>มูลค่าแยกตามหมวดสินค้า</div>
+            {cats.map(([cat,{items,val}],i)=>{const pct=totalVal>0?(val/totalVal*100):0;const col=CC[i%CC.length];return(<div key={cat} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:2,background:col,flexShrink:0}}/><span style={{fontWeight:700,fontSize:13}}>{cat}</span><span style={{color:T.textXs,fontSize:11}}>({items.length} รายการ)</span></div>
+                <span style={{fontWeight:800,fontSize:14,color:col}}>฿{fmt(val)} <span style={{color:T.textXs,fontWeight:400,fontSize:11}}>({pct.toFixed(1)}%)</span></span>
+              </div>
+              <div style={{background:T.bg,borderRadius:3,height:6,marginBottom:5}}><div style={{background:col,width:`${pct}%`,height:"100%",borderRadius:3}}/></div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{items.filter(s=>wac(s)>0).sort((a,b)=>wac(b)*b.qty-wac(a)*a.qty).map(s=><div key={s.id} style={{background:T.bg,borderRadius:6,padding:"2px 8px",fontSize:11}}>{s.name} <span style={{color:col,fontWeight:700}}>฿{fmt(wac(s)*s.qty)}</span></div>)}</div>
+            </div>);})}
+          </>)})()}
+          {catView==="supplier"&&(()=>{const sups=Object.entries(bySup).sort((a,b)=>b[1].val-a[1].val);return(<>
+            <div style={{color:T.textSm,fontSize:12,marginBottom:8,fontWeight:600}}>มูลค่าแยกตามซัพพลายเออร์</div>
+            {sups.map(([key,{label,val,items}],i)=>{const pct=totalVal>0?(val/totalVal*100):0;const col=CC[i%CC.length];return(<div key={key} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:2,background:col,flexShrink:0}}/><span style={{fontWeight:700,fontSize:13}}>{label}</span><span style={{color:T.textXs,fontSize:11}}>({items.length} รายการ)</span></div>
+                <span style={{fontWeight:800,fontSize:14,color:col}}>฿{fmt(val)} <span style={{color:T.textXs,fontWeight:400,fontSize:11}}>({pct.toFixed(1)}%)</span></span>
+              </div>
+              <div style={{background:T.bg,borderRadius:3,height:6,marginBottom:5}}><div style={{background:col,width:`${pct}%`,height:"100%",borderRadius:3}}/></div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{items.filter(s=>wac(s)>0).sort((a,b)=>wac(b)*b.qty-wac(a)*a.qty).map(s=><div key={s.id} style={{background:T.bg,borderRadius:6,padding:"2px 8px",fontSize:11}}>{s.name} <span style={{color:col,fontWeight:700}}>฿{fmt(wac(s)*s.qty)}</span></div>)}</div>
+            </div>);})}
+          </>)})()}
+          {catView==="status"&&(()=>{const statuses=[["✅ ปกติ","ok",T.green],["🟡 ใกล้หมด","low",T.yellow],["🟠 น้อยมาก","critical","#f97316"],["🔴 หมด","out",T.red]];return(<>
+            <div style={{color:T.textSm,fontSize:12,marginBottom:8,fontWeight:600}}>มูลค่าแยกตามสถานะสต็อค</div>
+            {statuses.map(([l,st,col])=>{const items=stock.filter(s=>stockSt(s)===st);const val=items.reduce((sum,s)=>{const av=wac(s);return sum+(av>0?av*s.qty:0);},0);const pct=totalVal>0?(val/totalVal*100):0;return(<div key={st} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:2,background:col,flexShrink:0}}/><span style={{fontWeight:700,fontSize:13}}>{l}</span><span style={{color:T.textXs,fontSize:11}}>({items.length} รายการ)</span></div>
+                <span style={{fontWeight:800,fontSize:14,color:col}}>฿{fmt(val)} <span style={{color:T.textXs,fontWeight:400,fontSize:11}}>({pct.toFixed(1)}%)</span></span>
+              </div>
+              <div style={{background:T.bg,borderRadius:3,height:6,marginBottom:st!=="ok"&&items.filter(s=>wac(s)>0).length>0?5:0}}><div style={{background:col,width:`${pct}%`,height:"100%",borderRadius:3}}/></div>
+              {st!=="ok"&&<div style={{display:"flex",flexWrap:"wrap",gap:4}}>{items.filter(s=>wac(s)>0).map(s=><div key={s.id} style={{background:col+"18",borderRadius:6,padding:"2px 8px",fontSize:11,color:col,fontWeight:600}}>{s.name} ฿{fmt(wac(s)*s.qty)}</div>)}</div>}
+            </div>);})}
+          </>)})()}
+        </Card>);
+      })()}
       {showAdd&&<Card style={{borderColor:T.borderOr}}>
         <div style={{color:T.orange,fontWeight:800,fontSize:15,marginBottom:10}}>➕ เพิ่มวัตถุดิบ</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {[["ชื่อ","name","text"],["หน่วย","unit","text"],["จำนวน","qty","number"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
             <div key={k}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>{l}</div><input type={t} value={newItem[k]} onChange={e=>setNewItem(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
           ))}
+          <div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>หมวด (Category)</div>
+            <select value={newItem.category} onChange={e=>setNewItem(p=>({...p,category:e.target.value}))} style={{...S.inp,height:42}}>
+              <option value="">— เลือกหมวด —</option>
+              {STOCK_CATS.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
           <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>ซัพพลายเออร์</div>
             <select value={newItem.supplierId} onChange={e=>setNewItem(p=>({...p,supplierId:+e.target.value}))} style={{...S.inp,height:42}}>
               {suppliers.map(s=><option key={s.id} value={s.id}>{user.role==="owner"?`${s.name} (ซัพ ${SUP_CODES[s._codeIndex??0]||"?"})`:supDisplay(s,false)}</option>)}
@@ -436,7 +509,7 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
           <button onClick={()=>setShowAdd(false)} style={S.ghost}>ยกเลิก</button>
         </div>
       </Card>}
-      <Tabs tabs={[["list","📋 รายการ"],["move","📥📤 รับ/จ่าย"],["history","📊 ประวัติ"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
+      <Tabs tabs={[["list","📋 รายการ"],["move","📥📤 รับ/จ่าย"],["history","📊 ประวัติ"],["alert","⚠️ แจ้งเตือน"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
       {tab==="list"&&<>
     <div style={{position:"relative"}}>
       <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,color:T.textSm}}>🔍</span>
@@ -446,11 +519,19 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
     {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).length===0&&search&&(
       <div style={{textAlign:"center",padding:24,color:T.textSm}}>ไม่พบ "{search}"</div>
     )}
-    {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);const isOwner=user.role==="owner";return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
+    {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);const isOwner=user.role==="owner";const itemVal=wac(item)*item.qty;const vola=costVolatility(item);const trend=costTrend(item);const isHighCost=trend>15;const isVolatile=vola>20;return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":isHighCost||isVolatile?T.yellow+"66":T.border}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-          <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontWeight:700,fontSize:16}}>{item.name}</span><Badge status={st} /></div>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontWeight:700,fontSize:16}}>{item.name}</span>
+              <Badge status={st} />
+              {item.category&&<span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:600}}>{item.category}</span>}
+              {isHighCost&&canPrice&&<span style={{background:T.redLt,color:T.red,borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:700}}>📈 ต้นทุนสูง +{trend.toFixed(0)}%</span>}
+              {isVolatile&&canPrice&&<span style={{background:T.yellowLt,color:T.yellow,borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:700}}>⚡ ผันผวน {vola.toFixed(0)}%</span>}
+            </div>
             <div style={{color:T.textSm,fontSize:13,marginTop:3}}>ซัพฯ: {supDisplay(sup,isOwner)} • ใช้/วัน {item.dailyUse}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}</div>
             <div style={{color:T.textXs,fontSize:12,marginTop:2}}>ขั้นต่ำ {item.minQty} • เหลือ {item.dailyUse>0?(item.qty/item.dailyUse).toFixed(1):"∞"} วัน</div>
+            {canPrice&&itemVal>0&&<div style={{marginTop:4,display:"inline-block",background:T.orangeLt,borderRadius:6,padding:"2px 8px",fontSize:12,color:T.orange,fontWeight:700}}>มูลค่า ฿{fmt(itemVal)}</div>}
           </div>
           <div style={{textAlign:"right",marginLeft:10}}><div style={{color:ST_C[st],fontWeight:900,fontSize:26}}>{item.qty}</div><div style={{color:T.textSm,fontSize:13}}>{item.unit}</div></div>
         </div>
@@ -460,23 +541,66 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
               {[["ชื่อ","name","text"],["หน่วย","unit","text"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
                 <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
               ))}
+              <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>หมวด (Category)</div>
+                <select value={editData.category??item.category??""} onChange={e=>setEditData(p=>({...p,category:e.target.value}))} style={{...S.inp,height:40}}>
+                  <option value="">— เลือกหมวด —</option>
+                  {STOCK_CATS.map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
               <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>ซัพพลายเออร์</div>
                 <select value={editData.supplierId??item.supplierId} onChange={e=>setEditData(p=>({...p,supplierId:+e.target.value}))} style={{...S.inp,height:40}}>
                   {suppliers.map(s=><option key={s.id} value={s.id}>{user.role==="owner"?`${s.name} (ซัพ ${SUP_CODES[s._codeIndex??0]||"?"})`:supDisplay(s,false)}</option>)}
                 </select>
               </div>
             </div>
-            <div style={{display:"flex",gap:8}}><button onClick={()=>{setStock(p=>p.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse,supplierId:editData.supplierId||s.supplierId}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
+            <div style={{display:"flex",gap:8}}><button onClick={()=>{setStock(p=>p.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse,supplierId:editData.supplierId||s.supplierId,category:editData.category??s.category}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
           </div>
         ):(
           <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
-            <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
+            <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse,category:item.category||""});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
             <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))setStock(p=>p.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
           </div>
         )}
       </Card>);})}
-      </>
-  }{tab==="move"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {tab==="alert"&&(()=>{
+        const highCostItems=stock.filter(s=>canPrice&&costTrend(s)>15).sort((a,b)=>costTrend(b)-costTrend(a));
+        const volatileItems=stock.filter(s=>canPrice&&costVolatility(s)>20).sort((a,b)=>costVolatility(b)-costVolatility(a));
+        const noPrice=stock.filter(s=>wac(s)===0&&s.qty>0);
+        return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {!canPrice&&<Card style={{background:T.yellowLt,borderColor:T.yellow+"44",textAlign:"center",padding:20}}><div style={{fontSize:24,marginBottom:6}}>🔒</div><div style={{color:T.yellow,fontWeight:700}}>ต้องเปิดสิทธิ์ดูราคาก่อน</div></Card>}
+          {canPrice&&<>
+            {highCostItems.length>0&&<Card style={{borderColor:T.red+"44",background:T.redLt}}>
+              <div style={{color:T.red,fontWeight:800,fontSize:15,marginBottom:10}}>📈 ต้นทุนสูงกว่าปกติ ({highCostItems.length} รายการ)</div>
+              <div style={{color:T.textSm,fontSize:12,marginBottom:10}}>ราคารับล่าสุดสูงกว่าต้นทุนเฉลี่ย (WAC) มากกว่า 15%</div>
+              {highCostItems.map(s=>{const tr=costTrend(s);const last=s.costHistory[s.costHistory.length-1]?.unitCost||0;const avg=wac(s);return(<div key={s.id} style={{background:"#fff",borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{color:T.textSm,fontSize:12}}>{s.category||"ไม่ระบุหมวด"}</div></div>
+                  <div style={{textAlign:"right"}}><div style={{color:T.red,fontWeight:900,fontSize:16}}>+{tr.toFixed(1)}%</div><div style={{fontSize:11,color:T.textXs}}>จาก ฿{avg.toFixed(2)} → ฿{last.toFixed(2)}/{s.unit}</div></div>
+                </div>
+                <div style={{marginTop:6,background:T.bg,borderRadius:4,height:5}}><div style={{background:T.red,width:`${Math.min(tr,100)}%`,height:"100%",borderRadius:4}}/></div>
+              </div>);})}
+            </Card>}
+            {volatileItems.length>0&&<Card style={{borderColor:T.yellow+"44",background:T.yellowLt}}>
+              <div style={{color:T.yellow,fontWeight:800,fontSize:15,marginBottom:10}}>⚡ ราคาผันผวนสูง ({volatileItems.length} รายการ)</div>
+              <div style={{color:T.textSm,fontSize:12,marginBottom:10}}>ความผันผวนของราคา (CV) เกิน 20% — ควรล็อคราคาหรือหาซัพฯ สำรอง</div>
+              {volatileItems.map(s=>{const vola=costVolatility(s);const h=s.costHistory||[];const prices=h.map(x=>x.unitCost);const mx=Math.max(...prices);const mn=Math.min(...prices);return(<div key={s.id} style={{background:"#fff",borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{color:T.textSm,fontSize:12}}>{s.category||"ไม่ระบุหมวด"} • {h.length} ครั้ง</div></div>
+                  <div style={{textAlign:"right"}}><div style={{color:T.yellow,fontWeight:900,fontSize:16}}>CV {vola.toFixed(1)}%</div><div style={{fontSize:11,color:T.textXs}}>฿{mn.toFixed(2)} – ฿{mx.toFixed(2)}/{s.unit}</div></div>
+                </div>
+                <div style={{display:"flex",gap:4,marginTop:6,flexWrap:"wrap"}}>{h.slice(-5).map((x,i)=><div key={i} style={{flex:1,minWidth:36,background:T.bg,borderRadius:5,padding:"3px 4px",textAlign:"center",fontSize:10}}><div style={{color:T.textXs}}>{x.date?.slice(5)||"-"}</div><div style={{fontWeight:700,color:x.unitCost>wac(s)*1.1?T.red:x.unitCost<wac(s)*0.9?T.green:T.text,fontSize:11}}>฿{x.unitCost.toFixed(0)}</div></div>)}</div>
+              </div>);})}
+            </Card>}
+            {noPrice.length>0&&<Card style={{borderColor:T.border}}>
+              <div style={{color:T.textMd,fontWeight:700,fontSize:14,marginBottom:8}}>❓ ยังไม่มีราคา ({noPrice.length} รายการ)</div>
+              <div style={{color:T.textSm,fontSize:12,marginBottom:8}}>กรอกราคาตอนรับสินค้าเข้าเพื่อคำนวณมูลค่าสต็อค</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{noPrice.map(s=><div key={s.id} style={{background:T.bg,borderRadius:7,padding:"4px 10px",fontSize:12,fontWeight:600}}>{s.name}</div>)}</div>
+            </Card>}
+            {highCostItems.length===0&&volatileItems.length===0&&noPrice.length===0&&<Card style={{background:T.greenLt,borderColor:T.green+"44",textAlign:"center",padding:24}}><div style={{fontSize:32,marginBottom:8}}>✅</div><div style={{color:T.green,fontWeight:800,fontSize:16}}>ต้นทุนปกติทุกรายการ</div><div style={{color:T.textSm,fontSize:13,marginTop:4}}>ไม่มีรายการที่น่ากังวล</div></Card>}
+          </>}
+        </div>);
+      })()}
+      {tab==="move"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",gap:8}}>{[["in","📥 รับเข้า",T.green],["out","📤 จ่ายออก",T.red]].map(([v,l,c])=><button key={v} onClick={()=>setMvType(v)} style={{flex:1,padding:11,fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:F,borderRadius:10,background:mvType===v?c+"18":"#fff",border:`2px solid ${mvType===v?c:T.border}`,color:mvType===v?c:T.textMd}}>{l}</button>)}</div>
         <div><div style={{color:T.textSm,fontSize:13,marginBottom:5,fontWeight:600}}>เลือกรายการ</div>
           <select value={selId} onChange={e=>{setSelId(e.target.value);setQty("");setCost("");}} style={{...S.inp,fontSize:15,height:46}}>
