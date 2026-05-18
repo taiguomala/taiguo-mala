@@ -572,7 +572,7 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
         </div>
       </Card>}
       <Tabs tabs={[["list","📋 รายการ"],["move","📥📤 รับ/จ่าย"],["history","📊 ประวัติ"],["alert","⚠️ แจ้งเตือน"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
-      {tab==="list"&&<>
+      {tab==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
     <div style={{position:"relative"}}>
       <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,color:T.textSm}}>🔍</span>
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาสินค้า..." style={{...S.inp,paddingLeft:36,fontSize:15}} />
@@ -591,7 +591,7 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
     {(()=>{
       const filtered=stock.filter(s=>{const matchSearch=s.name.toLowerCase().includes(search.toLowerCase());const matchCat=catFilter==="ทั้งหมด"||(s.category||"ไม่ระบุหมวด")===catFilter;return matchSearch&&matchCat;});
       const catVal=filtered.reduce((sum,s)=>sum+wac(s)*s.qty,0);
-      return(<>
+      return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
         {catFilter!=="ทั้งหมด"&&catVal>0&&<div style={{background:T.orangeLt,borderRadius:8,padding:"7px 12px",fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:T.textMd}}>มูลค่าหมวด <b>{catFilter}</b></span>
           <span style={{color:T.orange,fontWeight:800,fontSize:15}}>฿{fmt(catVal)}</span>
@@ -641,8 +641,9 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
           )}
         </Card>);
       })}
-      </>;
+      </div>);
     })()}
+      </div>}
       {tab==="alert"&&(()=>{
         const highCostItems=stock.filter(s=>canPrice&&costTrend(s)>15).sort((a,b)=>costTrend(b)-costTrend(a));
         const volatileItems=stock.filter(s=>canPrice&&costVolatility(s)>20).sort((a,b)=>costVolatility(b)-costVolatility(a));
