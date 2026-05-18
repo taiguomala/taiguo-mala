@@ -45,6 +45,8 @@ const today=()=>new Date().toISOString().split("T")[0];
 const lsGet=(k,def)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 const fmt=n=>Math.round(n).toLocaleString("th-TH");
+const SUP_CODES=["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"];
+const supDisplay=(sup,isOwner)=>{if(!sup)return"-";if(isOwner)return sup.name;const idx=sup._codeIndex!==undefined?sup._codeIndex:0;return`ซัพ ${SUP_CODES[idx]||"?"}`;};
 const IN_CATS=["ยอดขาย dine-in","ยอดขาย delivery","เงินโอนเข้า","อื่นๆ"];
 const OUT_CATS=["วัตถุดิบ/ผัก","หมู/เนื้อ/ทะเล","ค่าเช่า","ค่าพนักงาน","ค่าไฟ/น้ำ","บรรจุภัณฑ์","อื่นๆ"];
 const PAY=["เงินสด","โอนธนาคาร","QR Code","GrabFood","LINE MAN"];
@@ -57,7 +59,7 @@ const readXlsx=file=>new Promise((res,rej)=>{const r=new FileReader();r.onload=e
 const calcOT=(out,rate=50)=>{if(!out)return{m:0,p:0};const[sh,sm]="21:00".split(":").map(Number);const[oh,om]=out.split(":").map(Number);const raw=(oh*60+om)-(sh*60+sm);if(raw<=0)return{m:0,p:0};const rounded=Math.floor(raw/30)*30;return{m:rounded,p:rounded>0?(rounded/60)*rate:0};};
 
 const INIT_STOCK=[{id:1,name:"หมูสามชั้น",unit:"kg",qty:15,minQty:5,dailyUse:3,supplierId:2,costHistory:[]},{id:2,name:"กุ้งแวนนาไม",unit:"kg",qty:3,minQty:4,dailyUse:2,supplierId:3,costHistory:[]},{id:3,name:"เต้าหู้ขาว",unit:"kg",qty:10,minQty:5,dailyUse:2,supplierId:1,costHistory:[]},{id:4,name:"ผักกาดขาว",unit:"kg",qty:2,minQty:3,dailyUse:2,supplierId:1,costHistory:[]},{id:5,name:"น้ำซุปมาล่า",unit:"ถุง",qty:20,minQty:8,dailyUse:4,supplierId:4,costHistory:[]},{id:6,name:"วุ้นเส้น",unit:"kg",qty:5,minQty:3,dailyUse:1,supplierId:1,costHistory:[]}];
-const INIT_SUPS=[{id:1,name:"ตลาดสดนครชัย",type:"ผัก",phone:"081-234-5678",active:true},{id:2,name:"ฟาร์มหมูสยาม",type:"หมู",phone:"082-345-6789",active:true},{id:3,name:"อาหารทะเลสด",type:"ทะเล",phone:"083-456-7890",active:true},{id:4,name:"ซอสมาล่าพรีเมียม",type:"ซอส",phone:"084-567-8901",active:true}];
+const INIT_SUPS=[{id:1,name:"ตลาดสดนครชัย",type:"ผัก",phone:"081-234-5678",active:true,_codeIndex:0},{id:2,name:"ฟาร์มหมูสยาม",type:"หมู",phone:"082-345-6789",active:true,_codeIndex:1},{id:3,name:"อาหารทะเลสด",type:"ทะเล",phone:"083-456-7890",active:true,_codeIndex:2},{id:4,name:"ซอสมาล่าพรีเมียม",type:"ซอส",phone:"084-567-8901",active:true,_codeIndex:3}];
 const INIT_STAFF=[
   {id:"owner",name:"DR.Fresh (เจ้าของ)",pin:"1234",role:"owner",active:true,perms:{cashflow:true,stock:true,purchase:true,report:true,admin:true,viewPrice:true,viewFinance:true},hr:{wage:0,wageType:"day",otPerHour:50,shiftStart:"09:00",shiftEnd:"18:00",bonusPct:0}},
   {id:"s1",name:"มิ้ว",pin:"1111",role:"staff",active:true,perms:{cashflow:true,stock:true,purchase:false,report:false,admin:false,viewPrice:false,viewFinance:false},hr:{wage:350,wageType:"day",otPerHour:50,shiftStart:"09:00",shiftEnd:"18:00",bonusPct:0}},
@@ -435,10 +437,10 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
     {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).length===0&&search&&(
       <div style={{textAlign:"center",padding:24,color:T.textSm}}>ไม่พบ "{search}"</div>
     )}
-    {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
+    {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);const isOwner=user.role==="owner";return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontWeight:700,fontSize:16}}>{item.name}</span><Badge status={st} /></div>
-            <div style={{color:T.textSm,fontSize:13,marginTop:3}}>ซัพฯ: {sup?.name||"-"} • ใช้/วัน {item.dailyUse}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}</div>
+            <div style={{color:T.textSm,fontSize:13,marginTop:3}}>ซัพฯ: {supDisplay(sup,isOwner)} • ใช้/วัน {item.dailyUse}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}</div>
             <div style={{color:T.textXs,fontSize:12,marginTop:2}}>ขั้นต่ำ {item.minQty} • เหลือ {item.dailyUse>0?(item.qty/item.dailyUse).toFixed(1):"∞"} วัน</div>
           </div>
           <div style={{textAlign:"right",marginLeft:10}}><div style={{color:ST_C[st],fontWeight:900,fontSize:26}}>{item.qty}</div><div style={{color:T.textSm,fontSize:13}}>{item.unit}</div></div>
@@ -568,12 +570,13 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
   );
 }
 
-function PurchasePage({stock,suppliers,lineToken}){
+function PurchasePage({stock,suppliers,lineToken,user}){
   const[sel,setSel]=useState({});const[oQty,setOQty]=useState({});const[note,setNote]=useState("");const[sent,setSent]=useState(false);const[sending,setSending]=useState(false);const[prev,setPrev]=useState(false);
   const need=stock.filter(s=>s.qty<s.minQty);
   const tog=id=>{setSel(p=>({...p,[id]:!p[id]}));if(!oQty[id]){const it=stock.find(s=>s.id===id);if(it)setOQty(p=>({...p,[id]:String(Math.max(it.minQty*2-it.qty,1))}));}};
   const selItems=stock.filter(s=>sel[s.id]);
-  const buildMsg=()=>{const lines=["🛒 ใบสั่งซื้อ",`📅 ${today()}`,"─────────"];const bySup={};selItems.forEach(it=>{const sn=suppliers.find(x=>x.id===it.supplierId)?.name||"ไม่ระบุ";if(!bySup[sn])bySup[sn]=[];bySup[sn].push(it);});Object.entries(bySup).forEach(([sn,items])=>{lines.push(`\n🏪 ${sn}`);items.forEach(it=>lines.push(`  • ${it.name}: ${oQty[it.id]||it.minQty} ${it.unit} (มี ${it.qty})`));});if(note)lines.push(`\n📝 ${note}`);lines.push("\n─────────\nไท่กั๋วหม่าล่า");return lines.join("\n");};
+  const isOwner=user?.role==="owner";
+  const buildMsg=()=>{const lines=["🛒 ใบสั่งซื้อ",`📅 ${today()}`,"─────────"];const bySup={};selItems.forEach(it=>{const sup=suppliers.find(x=>x.id===it.supplierId);const sn=supDisplay(sup,true)||"ไม่ระบุ";if(!bySup[sn])bySup[sn]=[];bySup[sn].push(it);});Object.entries(bySup).forEach(([sn,items])=>{lines.push(`\n🏪 ${sn}`);items.forEach(it=>lines.push(`  • ${it.name}: ${oQty[it.id]||it.minQty} ${it.unit} (มี ${it.qty})`));});if(note)lines.push(`\n📝 ${note}`);lines.push("\n─────────\nไท่กั๋วหม่าล่า");return lines.join("\n");};
   const send=async()=>{if(!lineToken){alert("ตั้งค่า LINE Token ก่อน");return;}if(!selItems.length){alert("เลือกรายการก่อน");return;}setSending(true);try{const r=await fetch("https://notify-api.line.me/api/notify",{method:"POST",headers:{"Authorization":`Bearer ${lineToken}`,"Content-Type":"application/x-www-form-urlencoded"},body:`message=${encodeURIComponent(buildMsg())}`});if(r.ok){setSent(true);setTimeout(()=>setSent(false),5000);}else alert("ส่งไม่สำเร็จ");}catch{alert("ผิดพลาด");}setSending(false);};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -585,12 +588,12 @@ function PurchasePage({stock,suppliers,lineToken}){
             <div style={{color:T.red,fontWeight:800,fontSize:15}}>🚨 ต้องสั่งด่วน ({need.length})</div>
             <button onClick={()=>{const s={};const q={};need.forEach(x=>{s[x.id]=true;q[x.id]=String(x.minQty*2-x.qty);});setSel(s);setOQty(q);}} style={{...S.btn(T.red),fontSize:13,padding:"6px 12px"}}>เลือกทั้งหมด</button>
           </div>
-          {need.map(s=>{const isSel=sel[s.id];const sup=suppliers.find(x=>x.id===s.supplierId);return(
+          {need.map(s=>{const isSel=sel[s.id];const sup=suppliers.find(x=>x.id===s.supplierId);const isOwner=user?.role==="owner";return(
             <div key={s.id} style={{background:"#fff",borderRadius:10,padding:"11px 14px",marginBottom:7,border:`2px solid ${isSel?T.orange:T.border}`,cursor:"pointer"}} onClick={()=>tog(s.id)}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div style={{display:"flex",alignItems:"center",gap:9}}>
                   <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isSel?T.orange:T.border}`,background:isSel?T.orange:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:"#fff"}}>{isSel?"✓":""}</div>
-                  <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{color:T.textSm,fontSize:12}}>ซัพฯ: {sup?.name||"-"}</div></div>
+                  <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{color:T.textSm,fontSize:12}}>ซัพฯ: {supDisplay(sup,isOwner)}</div></div>
                 </div>
                 <div style={{textAlign:"right"}}><div style={{color:T.red,fontWeight:700}}>เหลือ {s.qty} {s.unit}</div><div style={{color:T.textXs,fontSize:11}}>ขั้นต่ำ {s.minQty}</div></div>
               </div>
@@ -1153,7 +1156,7 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
             <div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>ประเภท</div><input value={newSup.type} onChange={e=>setNewSup(p=>({...p,type:e.target.value}))} style={S.inp} /></div>
             <div><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>โทร</div><input value={newSup.phone} onChange={e=>setNewSup(p=>({...p,phone:e.target.value}))} style={S.inp} /></div>
           </div>
-          <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{if(!newSup.name)return;setSuppliers(p=>[...p,{...newSup,id:Date.now()}]);setNewSup({name:"",type:"",phone:"",active:true});setShowAddSup(false);}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>setShowAddSup(false)} style={S.ghost}>ยกเลิก</button></div>
+          <div style={{display:"flex",gap:8,marginTop:9}}><button onClick={()=>{if(!newSup.name)return;setSuppliers(p=>[...p,{...newSup,id:Date.now(),_codeIndex:p.length}]);setNewSup({name:"",type:"",phone:"",active:true});setShowAddSup(false);}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>setShowAddSup(false)} style={S.ghost}>ยกเลิก</button></div>
         </Card>}
         {suppliers.map(s=>(
           <Card key={s.id} style={{borderColor:s.active?T.border:T.red+"33"}}>
@@ -1168,7 +1171,10 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
               </div>
             ):(
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{color:T.textSm,fontSize:12}}>{s.type} • {s.phone}</div></div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14}}>{s.name} <span style={{fontWeight:400,fontSize:12,color:T.orange,background:T.orangeLt,borderRadius:5,padding:"1px 7px"}}>โค้ด: ซัพ {SUP_CODES[s._codeIndex??0]||"?"}</span></div>
+                  <div style={{color:T.textSm,fontSize:12}}>{s.type} • {s.phone}</div>
+                </div>
                 <div style={{display:"flex",gap:5}}>
                   <button onClick={()=>setSuppliers(p=>p.map(x=>x.id===s.id?{...x,active:!x.active}:x))} style={{background:s.active?T.greenLt:T.redLt,border:`1px solid ${s.active?T.green:T.red}44`,borderRadius:7,padding:"4px 8px",color:s.active?T.green:T.red,cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:F}}>{s.active?"เปิด":"ปิด"}</button>
                   <button onClick={()=>{setEditSupId(s.id);setEditSupData({});}} style={{...S.ghost,padding:"4px 8px",fontSize:11}}>✏️</button>
@@ -1391,7 +1397,7 @@ export default function App(){
     cashflow:<CashflowPage cf={cf} setCF={setCF} user={user} dbReady={dbReady} />,
     stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} />,
     staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} />,
-    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} />,
+    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} />,
     report:<ReportPage cf={cf} stock={stock} movements={movements} user={user} fixedCosts={fixedCosts} waste={waste} setWaste={setWaste} promos={promos} setPromos={setPromos} />,
     hr:<HRPage staff={staff} setStaff={setStaff} attendance={attendance} setAttendance={setAttendance} cf={cf} shopLat={shopLat} shopLng={shopLng} />,
     settings:<SettingsPage staff={staff} setStaff={setStaff} lineToken={lineToken} setLineToken={setLineToken} fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} suppliers={suppliers} setSuppliers={setSuppliers} shopLat={shopLat} setShopLat={setShopLat} shopLng={shopLng} setShopLng={setShopLng} shopRadius={shopRadius} setShopRadius={setShopRadius} />,
