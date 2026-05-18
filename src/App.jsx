@@ -402,6 +402,7 @@ function CashflowPage({cf,setCF,user,dbReady}){
 
 function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
   const[tab,setTab]=useState("list");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1});
+  const[search,setSearch]=useState("");
   const canPrice=user.perms?.viewPrice;const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
   const showMsg=(t,ok)=>{setMsg({t,ok});setTimeout(()=>setMsg({t:"",ok:false}),3000);};
   const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}const uc=parseFloat(cost)||0;const nh=mvType==="in"&&uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:q,total:uc*q}]:item.costHistory;setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q,costHistory:nh}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:uc,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setCost("");setNote("");};
@@ -425,7 +426,16 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
         </div>
       </Card>}
       <Tabs tabs={[["list","📋 รายการ"],["move","📥📤 รับ/จ่าย"],["history","📊 ประวัติ"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
-      {tab==="list"&&stock.map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
+      {tab==="list"&&<>
+    <div style={{position:"relative"}}>
+      <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,color:T.textSm}}>🔍</span>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาสินค้า..." style={{...S.inp,paddingLeft:36,fontSize:15}} />
+      {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:18}}>×</button>}
+    </div>
+    {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).length===0&&search&&(
+      <div style={{textAlign:"center",padding:24,color:T.textSm}}>ไม่พบ "{search}"</div>
+    )}
+    {stock.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())).map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontWeight:700,fontSize:16}}>{item.name}</span><Badge status={st} /></div>
             <div style={{color:T.textSm,fontSize:13,marginTop:3}}>ซัพฯ: {sup?.name||"-"} • ใช้/วัน {item.dailyUse}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}</div>
@@ -449,7 +459,8 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
           </div>
         )}
       </Card>);})}
-      {tab==="move"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+      </>
+  }{tab==="move"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",gap:8}}>{[["in","📥 รับเข้า",T.green],["out","📤 จ่ายออก",T.red]].map(([v,l,c])=><button key={v} onClick={()=>setMvType(v)} style={{flex:1,padding:11,fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:F,borderRadius:10,background:mvType===v?c+"18":"#fff",border:`2px solid ${mvType===v?c:T.border}`,color:mvType===v?c:T.textMd}}>{l}</button>)}</div>
         <div><div style={{color:T.textSm,fontSize:13,marginBottom:5,fontWeight:600}}>เลือกรายการ</div>
           <select value={selId} onChange={e=>{setSelId(e.target.value);setQty("");setCost("");}} style={{...S.inp,fontSize:15,height:46}}>
@@ -485,6 +496,7 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
 
 function StaffStockPage({stock,setStock,movements,setMovements,user}){
   const[tab,setTab]=useState("quick");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[checked,setChecked]=useState({});const[done,setDone]=useState(false);
+  const[search2,setSearch2]=useState("");
   const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
   const showMsg=(t,ok)=>{setMsg({t,ok});setTimeout(()=>setMsg({t:"",ok:false}),3000);};
   const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:0,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setNote("");};
@@ -498,10 +510,15 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
       <Tabs tabs={[["quick","⚡ รับ/จ่าย"],["checklist","✅ นับรายวัน"],["history","📋 ประวัติ"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
       {tab==="quick"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",gap:8}}>{[["in","📥 รับเข้า",T.green],["out","📤 จ่ายออก",T.red]].map(([v,l,c])=><button key={v} onClick={()=>setMvType(v)} style={{flex:1,padding:11,fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:F,borderRadius:10,background:mvType===v?c+"18":"#fff",border:`2px solid ${mvType===v?c:T.border}`,color:mvType===v?c:T.textMd}}>{l}</button>)}</div>
+        <div style={{position:"relative",marginBottom:8}}>
+          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:15,color:T.textSm}}>🔍</span>
+          <input value={search2} onChange={e=>setSearch2(e.target.value)} placeholder="ค้นหาสินค้า..." style={{...S.inp,paddingLeft:36,fontSize:14}} />
+          {search2&&<button onClick={()=>setSearch2("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:18}}>×</button>}
+        </div>
         <div><div style={{color:T.textSm,fontSize:13,marginBottom:5,fontWeight:600}}>เลือกรายการ</div>
           <select value={selId} onChange={e=>{setSelId(e.target.value);setQty("");}} style={{...S.inp,fontSize:15,height:46}}>
             <option value="">— กรุณาเลือก —</option>
-            {[...stock].sort((a,b)=>({out:0,critical:1,low:2,ok:3}[stockSt(a)]-{out:0,critical:1,low:2,ok:3}[stockSt(b)])).map(s=>{const st=stockSt(s);return <option key={s.id} value={String(s.id)}>{st==="out"?"🔴":st==="critical"?"🟠":st==="low"?"🟡":"🟢"} {s.name} ({s.qty} {s.unit})</option>;})}
+            {[...stock].sort((a,b)=>({out:0,critical:1,low:2,ok:3}[stockSt(a)]-{out:0,critical:1,low:2,ok:3}[stockSt(b)])).filter(s=>s.name.toLowerCase().includes(search2.toLowerCase())).map(s=>{const st=stockSt(s);return <option key={s.id} value={String(s.id)}>{st==="out"?"🔴":st==="critical"?"🟠":st==="low"?"🟡":"🟢"} {s.name} ({s.qty} {s.unit})</option>;})}
           </select>
         </div>
         {selItem&&<div style={{background:T.bg,borderRadius:10,padding:"9px 14px",display:"flex",justifyContent:"space-between",fontSize:14}}><span>คงเหลือ</span><span style={{color:ST_C[stockSt(selItem)],fontWeight:800,fontSize:17}}>{selItem.qty} {selItem.unit}</span></div>}
@@ -515,7 +532,12 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
       </div>}
       {tab==="checklist"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
         {done&&<div style={{background:T.greenLt,borderRadius:10,padding:"11px 16px",color:T.green,fontWeight:800}}>✅ บันทึกสำเร็จ!</div>}
-        {stock.map(item=>{const st=stockSt(item);const val=checked[String(item.id)]??"";const diff=val!==""&&!isNaN(+val)?+val-item.qty:null;return(
+        <div style={{position:"relative",marginBottom:4}}>
+          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:15,color:T.textSm}}>🔍</span>
+          <input value={search2} onChange={e=>setSearch2(e.target.value)} placeholder="ค้นหาสินค้า..." style={{...S.inp,paddingLeft:36,fontSize:14}} />
+          {search2&&<button onClick={()=>setSearch2("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:18}}>×</button>}
+        </div>
+        {stock.filter(s=>s.name.toLowerCase().includes(search2.toLowerCase())).map(item=>{const st=stockSt(item);const val=checked[String(item.id)]??"";const diff=val!==""&&!isNaN(+val)?+val-item.qty:null;return(
           <Card key={item.id} style={{padding:"11px 14px",borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:14}}>{item.name}</span><Badge status={st} /></div>
@@ -1203,36 +1225,107 @@ export default function App(){
   const[shopRadius,setShopRadius]=useState(()=>lsGet("tg_srad","200"));
   const[dbReady,setDbReady]=useState(false);const[loading,setLoading]=useState(true);
 
-  useEffect(()=>{async function load(){
-  setLoading(true);
-  try{
-    const[cfD,stD,mvD,attD,wasteD,promoD,setD]=await Promise.all([
-      db.getCF(),db.getStock(),db.getMvs(),db.getAtt(),db.getWaste(),db.getPromos(),db.getSettings()
-    ]);
-    if(cfD?.length)setCF(cfD.map(r=>({id:r.id,date:r.date,flow:r.flow,cat:r.cat,itemName:r.item_name||"",amount:r.amount,method:r.method,note:r.note||"",branch:r.branch||"main",staffId:r.staff_id||"owner"})));
-    if(stD?.length)setStock(stD.map(r=>({id:r.id,name:r.name,unit:r.unit,qty:r.qty,minQty:r.min_qty,dailyUse:r.daily_use,supplierId:r.supplier_id||1,costHistory:r.cost_history||[]})));
-    if(mvD?.length)setMovements(mvD.map(r=>({id:r.id,itemId:r.item_id,type:r.type,qty:r.qty,unitCost:r.unit_cost||0,date:r.date,staffId:r.staff_id||"",note:r.note||"",branch:r.branch||"main"})));
-    if(attD?.length)setAttendance(attD.map(r=>({id:r.id,staffId:r.staff_id,date:r.date,checkIn:r.check_in,checkOut:r.check_out||"",note:r.note||"",otOverride:r.ot_override})));
-    if(wasteD?.length)setWaste(wasteD.map(r=>({id:r.id,date:r.date,itemId:r.item_id||"",itemName:r.item_name||"",qty:r.qty,reason:r.reason||"",cost:r.cost||0})));
-    if(promoD?.length)setPromos(promoD.map(r=>({id:r.id,date:r.date,name:r.name,amount:r.amount,note:r.note||""})));
-    if(setD?.length){
-      setD.forEach(s=>{
-        try{
-          const v=JSON.parse(s.value);
-          if(s.key==="staff")setStaff(v);
-          else if(s.key==="suppliers")setSuppliers(v);
-          else if(s.key==="fixedCosts")setFixedCosts(v);
-          else if(s.key==="lineToken")setLineToken(v);
-          else if(s.key==="shopLat")setShopLat(v);
-          else if(s.key==="shopLng")setShopLng(v);
-          else if(s.key==="shopRadius")setShopRadius(v);
-        }catch{}
-      });
+  useEffect(()=>{
+    async function load(){
+      setLoading(true);
+      try{
+        const[cfD,stD,mvD,attD,wasteD,promoD,setD]=await Promise.all([
+          db.getCF(),db.getStock(),db.getMvs(),db.getAtt(),db.getWaste(),db.getPromos(),db.getSettings()
+        ]);
+        if(cfD?.length)setCF(cfD.map(r=>({id:r.id,date:r.date,flow:r.flow,cat:r.cat,itemName:r.item_name||"",amount:r.amount,method:r.method,note:r.note||"",branch:r.branch||"main",staffId:r.staff_id||"owner"})));
+        if(stD?.length)setStock(stD.map(r=>({id:r.id,name:r.name,unit:r.unit,qty:r.qty,minQty:r.min_qty,dailyUse:r.daily_use,supplierId:r.supplier_id||1,costHistory:r.cost_history||[]})));
+        if(mvD?.length)setMovements(mvD.map(r=>({id:r.id,itemId:r.item_id,type:r.type,qty:r.qty,unitCost:r.unit_cost||0,date:r.date,staffId:r.staff_id||"",note:r.note||"",branch:r.branch||"main"})));
+        if(attD?.length)setAttendance(attD.map(r=>({id:r.id,staffId:r.staff_id,date:r.date,checkIn:r.check_in,checkOut:r.check_out||"",note:r.note||"",otOverride:r.ot_override})));
+        if(wasteD?.length)setWaste(wasteD.map(r=>({id:r.id,date:r.date,itemId:r.item_id||"",itemName:r.item_name||"",qty:r.qty,reason:r.reason||"",cost:r.cost||0})));
+        if(promoD?.length)setPromos(promoD.map(r=>({id:r.id,date:r.date,name:r.name,amount:r.amount,note:r.note||""})));
+        if(setD?.length){setD.forEach(s=>{try{const v=JSON.parse(s.value);if(s.key==="staff")setStaff(v);else if(s.key==="suppliers")setSuppliers(v);else if(s.key==="fixedCosts")setFixedCosts(v);else if(s.key==="lineToken")setLineToken(v);else if(s.key==="shopLat")setShopLat(v);else if(s.key==="shopLng")setShopLng(v);else if(s.key==="shopRadius")setShopRadius(v);}catch{}});}
+        setDbReady(true);window._dbReady=true;
+      }catch(e){console.error("Load error:",e);}
+      setLoading(false);
     }
-    setDbReady(true);window._dbReady=true;
-  }catch(e){console.error("Load error:",e);}
-  setLoading(false);
-}load();},[]);
+
+    load();
+
+    // ── Supabase Realtime via WebSocket ──
+    const REALTIME_URL = SB.replace("https://","wss://") + "/realtime/v1/websocket?apikey=" + SK + "&vsn=1.0.0";
+    let ws;
+    let heartbeat;
+    let reconnectTimer;
+
+    function subscribe(){
+      try{
+        ws = new WebSocket(REALTIME_URL);
+
+        ws.onopen = () => {
+          // Join all tables we care about
+          ["cashflow","attendance","stock","movements","waste","promos"].forEach((table,i)=>{
+            setTimeout(()=>{
+              ws.send(JSON.stringify({
+                topic: `realtime:public:${table}`,
+                event: "phx_join",
+                payload: {},
+                ref: String(i+1)
+              }));
+            }, i*100);
+          });
+          // Heartbeat every 25s
+          heartbeat = setInterval(()=>{
+            if(ws.readyState===1) ws.send(JSON.stringify({topic:"phoenix",event:"heartbeat",payload:{},ref:"hb"}));
+          }, 25000);
+        };
+
+        ws.onmessage = (e) => {
+          try{
+            const msg = JSON.parse(e.data);
+            if(msg.event !== "INSERT" && msg.event !== "UPDATE" && msg.event !== "DELETE") return;
+            const table = msg.topic?.replace("realtime:public:","");
+            const rec = msg.payload?.record;
+            const old = msg.payload?.old_record;
+
+            if(table === "cashflow"){
+              if(msg.event==="INSERT") setCF(p=>[{id:rec.id,date:rec.date,flow:rec.flow,cat:rec.cat,itemName:rec.item_name||"",amount:rec.amount,method:rec.method,note:rec.note||"",branch:rec.branch||"main",staffId:rec.staff_id||"owner"},...p.filter(x=>x.id!==rec.id)]);
+              else if(msg.event==="DELETE") setCF(p=>p.filter(x=>x.id!==old?.id));
+            }
+            else if(table === "attendance"){
+              if(msg.event==="INSERT") setAttendance(p=>[...p.filter(x=>x.id!==rec.id),{id:rec.id,staffId:rec.staff_id,date:rec.date,checkIn:rec.check_in,checkOut:rec.check_out||"",note:rec.note||"",otOverride:rec.ot_override}]);
+              else if(msg.event==="UPDATE") setAttendance(p=>p.map(x=>x.id===rec.id?{...x,checkOut:rec.check_out||"",note:rec.note||"",otOverride:rec.ot_override}:x));
+              else if(msg.event==="DELETE") setAttendance(p=>p.filter(x=>x.id!==old?.id));
+            }
+            else if(table === "stock"){
+              if(msg.event==="UPDATE"||msg.event==="INSERT") setStock(p=>p.map(x=>x.id===rec.id?{...x,qty:rec.qty,costHistory:rec.cost_history||x.costHistory}:x));
+            }
+            else if(table === "movements"){
+              if(msg.event==="INSERT") setMovements(p=>[{id:rec.id,itemId:rec.item_id,type:rec.type,qty:rec.qty,unitCost:rec.unit_cost||0,date:rec.date,staffId:rec.staff_id||"",note:rec.note||"",branch:rec.branch||"main"},...p]);
+              else if(msg.event==="DELETE") setMovements(p=>p.filter(x=>x.id!==old?.id));
+            }
+            else if(table === "waste"){
+              if(msg.event==="INSERT") setWaste(p=>[{id:rec.id,date:rec.date,itemId:rec.item_id||"",itemName:rec.item_name||"",qty:rec.qty,reason:rec.reason||"",cost:rec.cost||0},...p]);
+              else if(msg.event==="DELETE") setWaste(p=>p.filter(x=>x.id!==old?.id));
+            }
+            else if(table === "promos"){
+              if(msg.event==="INSERT") setPromos(p=>[{id:rec.id,date:rec.date,name:rec.name,amount:rec.amount,note:rec.note||""},...p]);
+              else if(msg.event==="DELETE") setPromos(p=>p.filter(x=>x.id!==old?.id));
+            }
+          }catch{}
+        };
+
+        ws.onerror = () => {};
+        ws.onclose = () => {
+          clearInterval(heartbeat);
+          // Reconnect after 5s
+          reconnectTimer = setTimeout(subscribe, 5000);
+        };
+      }catch{}
+    }
+
+    subscribe();
+
+    return ()=>{
+      clearInterval(heartbeat);
+      clearTimeout(reconnectTimer);
+      try{ ws?.close(); }catch{}
+    };
+  },[]);
 
   // Auto-save to localStorage (instant) + Supabase (sync)
   useEffect(()=>lsSet("tg_stock",stock),[stock]);
