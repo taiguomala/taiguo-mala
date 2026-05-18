@@ -639,7 +639,9 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
               <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))setStock(p=>p.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
             </div>
           )}
-        </Card>);})}</>;
+        </Card>);
+      })}
+      </>;
     })()}
       {tab==="alert"&&(()=>{
         const highCostItems=stock.filter(s=>canPrice&&costTrend(s)>15).sort((a,b)=>costTrend(b)-costTrend(a));
