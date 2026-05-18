@@ -411,7 +411,11 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Hdr title="📦 สต็อค" action={<div style={{display:"flex",gap:6}}>
-        <IEBtn onExport={()=>exportXlsx(stock.map(s=>({ชื่อ:s.name,หน่วย:s.unit,จำนวน:s.qty,ขั้นต่ำ:s.minQty,ใช้ต่อวัน:s.dailyUse})),"stock","stock")} onImport={rows=>{let a=0,u=0;const ns=[...stock];rows.forEach(r=>{const name=r["ชื่อ"]||r["name"]||"";if(!name)return;const idx=ns.findIndex(s=>s.name===name);if(idx>=0){if(r["จำนวน"]!==undefined)ns[idx]={...ns[idx],qty:+r["จำนวน"]};u++;}else{ns.push({id:Date.now()+Math.random(),name,unit:r["หน่วย"]||"kg",qty:+(r["จำนวน"]||0),minQty:+(r["ขั้นต่ำ"]||3),dailyUse:+(r["ใช้ต่อวัน"]||1),supplierId:1,costHistory:[]});a++;}});setStock(ns);alert(`เพิ่ม ${a} อัพเดท ${u}`);}} />
+        <IEBtn onExport={()=>exportXlsx(stock.map(s=>({ชื่อ:s.name,หน่วย:s.unit,จำนวน:s.qty,ขั้นต่ำ:s.minQty,ใช้ต่อวัน:s.dailyUse})),"stock","stock")} onImport={rows=>{let a=0,u=0;const ns=[...stock];rows.forEach(r=>{// รองรับหลายชื่อคอลัมน์
+const rawName=(r["ชื่อ"]||r["name"]||r["ชื่อสินค้า"]||r["สินค้า"]||"").toString().trim();if(!rawName)return;// ตัดโค้ด (TM0001) หรือ [TM001] ออกจากชื่อ เพื่อ match กับชื่อในระบบ
+const cleanName=rawName.replace(/\s*[\(\[（【][A-Za-z0-9\-_]+[\)\]）】]\s*$/,"").trim();const qty=r["จำนวน"]!==undefined?+r["จำนวน"]:r["qty"]!==undefined?+r["qty"]:undefined;const unit=(r["หน่วย"]||r["unit"]||"kg").toString().trim();// หาสินค้าที่ match (ชื่อเต็ม หรือ ชื่อที่ตัดโค้ดออก)
+const idx=ns.findIndex(s=>s.name===rawName||s.name===cleanName||s.name.toLowerCase()===cleanName.toLowerCase());if(idx>=0){if(qty!==undefined)ns[idx]={...ns[idx],qty};u++;}else{// เพิ่มสินค้าใหม่ด้วยชื่อที่ตัดโค้ดออกแล้ว
+ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["ขั้นต่ำ"]||r["min_qty"]||3),dailyUse:+(r["ใช้ต่อวัน"]||r["daily_use"]||1),supplierId:1,costHistory:[]});a++;}});setStock(ns);alert(`✅ นำเข้าสำเร็จ!\nอัพเดท ${u} รายการ | เพิ่มใหม่ ${a} รายการ`);}} />
         {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{setStock(INIT_STOCK);setMovements([]);}} />}
         <button onClick={()=>setShowAdd(!showAdd)} style={S.btn()}>+ เพิ่ม</button>
       </div>} />
@@ -421,9 +425,14 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
           {[["ชื่อ","name","text"],["หน่วย","unit","text"],["จำนวน","qty","number"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
             <div key={k}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>{l}</div><input type={t} value={newItem[k]} onChange={e=>setNewItem(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
           ))}
+          <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:13,marginBottom:4}}>ซัพพลายเออร์</div>
+            <select value={newItem.supplierId} onChange={e=>setNewItem(p=>({...p,supplierId:+e.target.value}))} style={{...S.inp,height:42}}>
+              {suppliers.map(s=><option key={s.id} value={s.id}>{user.role==="owner"?`${s.name} (ซัพ ${SUP_CODES[s._codeIndex??0]||"?"})`:supDisplay(s,false)}</option>)}
+            </select>
+          </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:10}}>
-          <button onClick={()=>{setStock([...stock,{...newItem,id:Date.now(),qty:+newItem.qty,minQty:+newItem.minQty,dailyUse:+newItem.dailyUse,costHistory:[]}]);setShowAdd(false);}} style={{...S.btn(),flex:1}}>บันทึก</button>
+          <button onClick={()=>{setStock([...stock,{...newItem,id:Date.now(),qty:+newItem.qty,minQty:+newItem.minQty,dailyUse:+newItem.dailyUse,supplierId:+newItem.supplierId,costHistory:[]}]);setShowAdd(false);}} style={{...S.btn(),flex:1}}>บันทึก</button>
           <button onClick={()=>setShowAdd(false)} style={S.ghost}>ยกเลิก</button>
         </div>
       </Card>}
@@ -451,8 +460,13 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
               {[["ชื่อ","name","text"],["หน่วย","unit","text"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
                 <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
               ))}
+              <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>ซัพพลายเออร์</div>
+                <select value={editData.supplierId??item.supplierId} onChange={e=>setEditData(p=>({...p,supplierId:+e.target.value}))} style={{...S.inp,height:40}}>
+                  {suppliers.map(s=><option key={s.id} value={s.id}>{user.role==="owner"?`${s.name} (ซัพ ${SUP_CODES[s._codeIndex??0]||"?"})`:supDisplay(s,false)}</option>)}
+                </select>
+              </div>
             </div>
-            <div style={{display:"flex",gap:8}}><button onClick={()=>{setStock(p=>p.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
+            <div style={{display:"flex",gap:8}}><button onClick={()=>{setStock(p=>p.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse,supplierId:editData.supplierId||s.supplierId}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
           </div>
         ):(
           <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
