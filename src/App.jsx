@@ -417,15 +417,69 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
   const[catFilter,setCatFilter]=useState("ทั้งหมด"); // "total"|"category"|"supplier"|"status"
   const canPrice=user.perms?.viewPrice;const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
   const showMsg=(t,ok)=>{setMsg({t,ok});setTimeout(()=>setMsg({t:"",ok:false}),3000);};
-  const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}const uc=parseFloat(cost)||0;const nh=mvType==="in"&&uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:q,total:uc*q}]:item.costHistory;setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q,costHistory:nh}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:uc,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setCost("");setNote("");};
+  const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}const uc=parseFloat(cost)||0;const nh=mvType==="in"&&uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:q,total:uc*q}]:(item.costHistory||[]);setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q,costHistory:nh}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:uc,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setCost("");setNote("");};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Hdr title="📦 สต็อค" action={<div style={{display:"flex",gap:6}}>
-        <IEBtn onExport={()=>exportXlsx(stock.map(s=>({ชื่อ:s.name,หน่วย:s.unit,จำนวน:s.qty,ขั้นต่ำ:s.minQty,ใช้ต่อวัน:s.dailyUse})),"stock","stock")} onImport={rows=>{let a=0,u=0;const ns=[...stock];rows.forEach(r=>{// รองรับหลายชื่อคอลัมน์
-const rawName=(r["ชื่อ"]||r["name"]||r["ชื่อสินค้า"]||r["สินค้า"]||"").toString().trim();if(!rawName)return;// ตัดโค้ด (TM0001) หรือ [TM001] ออกจากชื่อ เพื่อ match กับชื่อในระบบ
-const cleanName=rawName.replace(/\s*[\(\[（【][A-Za-z0-9\-_]+[\)\]）】]\s*$/,"").trim();const qty=r["จำนวน"]!==undefined?+r["จำนวน"]:r["qty"]!==undefined?+r["qty"]:undefined;const unit=(r["หน่วย"]||r["unit"]||"kg").toString().trim();// หาสินค้าที่ match (ชื่อเต็ม หรือ ชื่อที่ตัดโค้ดออก)
-const idx=ns.findIndex(s=>s.name===rawName||s.name===cleanName||s.name.toLowerCase()===cleanName.toLowerCase());if(idx>=0){if(qty!==undefined)ns[idx]={...ns[idx],qty};u++;}else{// เพิ่มสินค้าใหม่ด้วยชื่อที่ตัดโค้ดออกแล้ว
-ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["ขั้นต่ำ"]||r["min_qty"]||3),dailyUse:+(r["ใช้ต่อวัน"]||r["daily_use"]||1),supplierId:1,costHistory:[]});a++;}});setStock(ns);alert(`✅ นำเข้าสำเร็จ!\nอัพเดท ${u} รายการ | เพิ่มใหม่ ${a} รายการ`);}} />
+        <IEBtn
+          onExport={()=>exportXlsx(stock.map(s=>({
+            ชื่อ:s.name,
+            หน่วย:s.unit,
+            จำนวน:s.qty,
+            ...(canPrice&&{ราคาต่อหน่วย:wac(s)>0?wac(s).toFixed(2):""}),
+            หมวด:s.category||"",
+            ขั้นต่ำ:s.minQty,
+            ใช้ต่อวัน:s.dailyUse
+          })),"stock","stock")}
+          onImport={rows=>{
+            let a=0,u=0,priceUpdated=0;
+            const ns=[...stock];
+            const newMovements=[];
+            rows.forEach(r=>{
+              const rawName=(r["ชื่อ"]||r["name"]||r["ชื่อสินค้า"]||r["สินค้า"]||"").toString().trim();
+              if(!rawName)return;
+              const cleanName=rawName.replace(/\s*[\(\[（【][A-Za-z0-9\-_]+[\)\]）】]\s*$/,"").trim();
+              const newQty=r["จำนวน"]!==undefined?+r["จำนวน"]:r["qty"]!==undefined?+r["qty"]:undefined;
+              const unitCost=r["ราคาต่อหน่วย"]!==undefined?+r["ราคาต่อหน่วย"]:r["ราคา"]!==undefined?+r["ราคา"]:r["price"]!==undefined?+r["price"]:0;
+              const unit=(r["หน่วย"]||r["unit"]||"kg").toString().trim();
+              const category=(r["หมวด"]||r["category"]||"").toString().trim();
+              const idx=ns.findIndex(s=>s.name===rawName||s.name===cleanName||s.name.toLowerCase()===cleanName.toLowerCase());
+              if(idx>=0){
+                const item=ns[idx];
+                const oldQty=item.qty;
+                const diff=newQty!==undefined?newQty-oldQty:0;
+                // อัปเดตจำนวน
+                if(newQty!==undefined)ns[idx]={...ns[idx],qty:newQty};
+                // อัปเดตหมวด
+                if(category)ns[idx]={...ns[idx],category};
+                // บันทึกราคาถ้ามี และมีการรับเข้า (diff > 0)
+                if(unitCost>0&&diff>0){
+                  const newHistory=[...(ns[idx].costHistory||[]),{date:today(),unitCost,qty:diff,total:unitCost*diff}];
+                  ns[idx]={...ns[idx],costHistory:newHistory};
+                  newMovements.push({id:Date.now()+Math.random(),itemId:item.id,type:"in",qty:diff,unitCost,date:today(),staffId:user.id,note:`นำเข้า Excel ฿${unitCost}/${unit}`,branch:"main"});
+                  priceUpdated++;
+                } else if(diff>0){
+                  // รับเข้าแต่ไม่มีราคา
+                  newMovements.push({id:Date.now()+Math.random(),itemId:item.id,type:"in",qty:diff,unitCost:0,date:today(),staffId:user.id,note:"นำเข้า Excel",branch:"main"});
+                } else if(diff<0){
+                  newMovements.push({id:Date.now()+Math.random(),itemId:item.id,type:"out",qty:Math.abs(diff),unitCost:0,date:today(),staffId:user.id,note:"ปรับจาก Excel",branch:"main"});
+                }
+                u++;
+              } else {
+                // สินค้าใหม่
+                const newId=Date.now()+Math.random();
+                const initQty=newQty||0;
+                const initHistory=unitCost>0&&initQty>0?[{date:today(),unitCost,qty:initQty,total:unitCost*initQty}]:[];
+                ns.push({id:newId,name:cleanName,unit,qty:initQty,minQty:+(r["ขั้นต่ำ"]||r["min_qty"]||3),dailyUse:+(r["ใช้ต่อวัน"]||r["daily_use"]||1),supplierId:1,category,costHistory:initHistory});
+                if(initQty>0)newMovements.push({id:Date.now()+Math.random(),itemId:newId,type:"in",qty:initQty,unitCost:unitCost||0,date:today(),staffId:user.id,note:"เพิ่มจาก Excel",branch:"main"});
+                a++;
+              }
+            });
+            setStock(ns);
+            if(newMovements.length>0)setMovements(p=>[...p,...newMovements]);
+            alert(`✅ นำเข้าสำเร็จ!\nอัพเดท ${u} รายการ | เพิ่มใหม่ ${a} รายการ${priceUpdated>0?`\n💰 อัปเดตราคา ${priceUpdated} รายการ`:""}`);
+          }}
+        />
         {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{setStock(INIT_STOCK);setMovements([]);}} />}
         <button onClick={()=>setShowAdd(!showAdd)} style={S.btn()}>+ เพิ่ม</button>
       </div>} />
@@ -571,7 +625,7 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
           <button onClick={()=>setShowAdd(false)} style={S.ghost}>ยกเลิก</button>
         </div>
       </Card>}
-      <Tabs tabs={[["list","📋 รายการ"],["move","📥📤 รับ/จ่าย"],["history","📊 ประวัติ"],["alert","⚠️ แจ้งเตือน"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
+      <Tabs tabs={[["list","📋 รายการ"],["move","📥📤 รับ/จ่าย"],["alert","⚠️ แจ้งเตือน"],["history","📊 ประวัติ"]]} active={tab} onChange={t=>{setTab(t);setSelId("");setQty("");setMsg({t:"",ok:false});}} />
       {tab==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
     <div style={{position:"relative"}}>
       <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,color:T.textSm}}>🔍</span>
@@ -690,7 +744,7 @@ ns.push({id:Date.now()+Math.random(),name:cleanName,unit,qty:qty||0,minQty:+(r["
             {[...stock].sort((a,b)=>({out:0,critical:1,low:2,ok:3}[stockSt(a)]-{out:0,critical:1,low:2,ok:3}[stockSt(b)])).map(s=>{const st=stockSt(s);return <option key={s.id} value={String(s.id)}>{st==="out"?"🔴":st==="critical"?"🟠":st==="low"?"🟡":"🟢"} {s.name} (เหลือ {s.qty} {s.unit})</option>;})}
           </select>
         </div>
-        {selItem&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {selItem&&<div style={{display:"grid",gridTemplateColumns:canPrice?"1fr 1fr 1fr":"1fr",gap:8}}>
           <div style={{background:T.bg,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
             <div style={{color:T.textXs,fontSize:11,marginBottom:2}}>คงเหลือ</div>
             <div style={{color:ST_C[stockSt(selItem)],fontWeight:900,fontSize:20}}>{selItem.qty}</div>
