@@ -495,7 +495,7 @@ function CashflowPage({cf,setCF,user,dbReady}){
   );
 }
 
-function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady}){
+function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady,compact}){
   const[tab,setTab]=useState("list");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1,category:"",initCost:""});
   const[search,setSearch]=useState("");
   const[catView,setCatView]=useState("total");
@@ -754,7 +754,26 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
           <span style={{color:T.orange,fontWeight:800,fontSize:15}}>฿{fmt(catVal)}</span>
         </div>}
         {filtered.length===0&&<div style={{textAlign:"center",padding:24,color:T.textSm}}>ไม่พบสินค้าในหมวดนี้</div>}
-        {filtered.map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);const isOwner=user.role==="owner";const itemVal=wac(item)*item.qty;const vola=costVolatility(item);const trend=costTrend(item);const isHighCost=trend>15;const isVolatile=vola>20;return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":isHighCost||isVolatile?T.yellow+"66":T.border}}>
+        {filtered.map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);const isOwner=user.role==="owner";const itemVal=wac(item)*item.qty;const vola=costVolatility(item);const trend=costTrend(item);const isHighCost=trend>15;const isVolatile=vola>20;return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":isHighCost||isVolatile?T.yellow+"66":T.border,padding:compact?"8px 12px":"16px 18px"}}>
+          {compact?(
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"nowrap",overflow:"hidden"}}>
+                  <span style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</span>
+                  <Badge status={st} />
+                  {item.category&&<span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"0 5px",fontSize:10,fontWeight:600,flexShrink:0}}>{item.category}</span>}
+                </div>
+                <div style={{color:T.textXs,fontSize:10,marginTop:1}}>
+                  ขั้นต่ำ {item.minQty}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}
+                  {isHighCost&&canPrice&&<span style={{color:T.red}}> 📈</span>}{isVolatile&&canPrice&&<span style={{color:T.yellow}}> ⚡</span>}
+                </div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <span style={{color:ST_C[st],fontWeight:900,fontSize:18}}>{item.qty} <span style={{fontSize:11,fontWeight:400}}>{item.unit}</span></span>
+                {canPrice&&itemVal>0&&<div style={{color:T.orange,fontSize:10,fontWeight:700}}>฿{fmt(itemVal)}</div>}
+              </div>
+            </div>
+          ):(
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -770,12 +789,29 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
             </div>
             <div style={{textAlign:"right",marginLeft:10}}><div style={{color:ST_C[st],fontWeight:900,fontSize:26}}>{item.qty}</div><div style={{color:T.textSm,fontSize:13}}>{item.unit}</div></div>
           </div>
+          )}
           {editId===item.id?(
             <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${T.bg}`}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                 {[["ชื่อ","name","text"],["หน่วย","unit","text"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
                   <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
                 ))}
+                {canPrice&&<div style={{gridColumn:"1/-1",background:T.orangeLt,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{color:T.orange,fontWeight:700,fontSize:12,marginBottom:6}}>💰 อัปเดตราคาต้นทุน</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>WAC ปัจจุบัน</div>
+                      <div style={{fontWeight:800,fontSize:16,color:T.orange}}>{wac(item)>0?`฿${wac(item).toFixed(2)}`:"ยังไม่มีราคา"}</div>
+                      <div style={{color:T.textXs,fontSize:10}}>/{editData.unit??item.unit}</div>
+                    </div>
+                    <div>
+                      <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>ราคาใหม่/หน่วย <span style={{color:T.textXs}}>(ไม่บังคับ)</span></div>
+                      <input type="number" value={editData.newCost||""} onChange={e=>setEditData(p=>({...p,newCost:e.target.value}))} style={{...S.inp,fontSize:15,borderColor:T.orange}} placeholder="0" />
+                    </div>
+                  </div>
+                  {editData.newCost&&+editData.newCost>0&&wac(item)>0&&(()=>{const diff=(+editData.newCost-wac(item))/wac(item)*100;return<div style={{marginTop:6,fontSize:11,color:diff>10?T.red:diff<-5?T.green:T.yellow,fontWeight:600}}>{diff>0?`▲ สูงกว่า WAC ${diff.toFixed(1)}%`:`▼ ต่ำกว่า WAC ${Math.abs(diff).toFixed(1)}%`}</div>})()}
+                  <div style={{color:T.textXs,fontSize:10,marginTop:4}}>* กรอกราคาใหม่แล้วระบบจะเพิ่มเป็น costHistory โดยอ้างอิงจากจำนวนปัจจุบัน</div>
+                </div>}
                 <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>หมวด (Category)</div>
                   <select value={editData.category??item.category??""} onChange={e=>setEditData(p=>({...p,category:e.target.value}))} style={{...S.inp,height:40}}>
                     <option value="">— เลือกหมวด —</option>
@@ -788,11 +824,30 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
                   </select>
                 </div>
               </div>
-              <div style={{display:"flex",gap:8}}><button onClick={()=>{saveAndSync(stock.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse,supplierId:editData.supplierId||s.supplierId,category:editData.category??s.category}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{
+                  const uc=canPrice&&editData.newCost&&+editData.newCost>0?+editData.newCost:0;
+                  const curQty=+(editData.qty??item.qty)||item.qty;
+                  // เพิ่ม costHistory ถ้ามีราคาใหม่
+                  const newHistory=uc>0
+                    ?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:curQty,total:uc*curQty}]
+                    :item.costHistory||[];
+                  const updated={...item,...editData,
+                    minQty:+editData.minQty||item.minQty,
+                    dailyUse:+editData.dailyUse||item.dailyUse,
+                    supplierId:editData.supplierId||item.supplierId,
+                    category:editData.category??item.category,
+                    costHistory:newHistory
+                  };
+                  saveAndSync(stock.map(s=>s.id===item.id?updated:s));
+                  setEditId(null);setEditData({});
+                }} style={{...S.btn(),flex:1}}>บันทึก</button>
+                <button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button>
+              </div>
             </div>
           ):(
             <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
-              <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse,category:item.category||""});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
+              <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse,category:item.category||"",supplierId:item.supplierId,newCost:""});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
               <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))saveAndSync(stock.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
             </div>
           )}
@@ -918,7 +973,7 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
   );
 }
 
-function StaffStockPage({stock,setStock,movements,setMovements,user}){
+function StaffStockPage({stock,setStock,movements,setMovements,user,compact}){
   const[tab,setTab]=useState("quick");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[checked,setChecked]=useState({});const[done,setDone]=useState(false);
   const[search2,setSearch2]=useState("");
   const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
@@ -962,15 +1017,15 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
           {search2&&<button onClick={()=>setSearch2("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:18}}>×</button>}
         </div>
         {stock.filter(s=>s.name.toLowerCase().includes(search2.toLowerCase())).map(item=>{const st=stockSt(item);const val=checked[String(item.id)]??"";const diff=val!==""&&!isNaN(+val)?+val-item.qty:null;return(
-          <Card key={item.id} style={{padding:"11px 14px",borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
+          <Card key={item.id} style={{padding:compact?"7px 10px":"11px 14px",borderColor:st!=="ok"?ST_C[st]+"44":T.border}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:14}}>{item.name}</span><Badge status={st} /></div>
-                <div style={{color:T.textSm,fontSize:12}}>ระบบ: {item.qty} {item.unit}</div>
-                {diff!==null&&<div style={{fontSize:12,fontWeight:600,marginTop:2,color:diff<0?T.yellow:T.green}}>{diff<0?`⚠️ ขาด ${Math.abs(diff)}`:diff>0?`+เกิน ${diff}`:"✓ ตรง"}</div>}
+              <div><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:compact?12:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:compact?140:999}}>{item.name}</span><Badge status={st} /></div>
+                <div style={{color:T.textSm,fontSize:compact?10:12}}>ระบบ: {item.qty} {item.unit}</div>
+                {diff!==null&&<div style={{fontSize:compact?10:12,fontWeight:600,marginTop:2,color:diff<0?T.yellow:T.green}}>{diff<0?`⚠️ ขาด ${Math.abs(diff)}`:diff>0?`+เกิน ${diff}`:"✓ ตรง"}</div>}
               </div>
               <div style={{display:"flex",alignItems:"center",gap:5}}>
-                <input type="number" value={val} onChange={e=>setChecked(p=>({...p,[String(item.id)]:e.target.value}))} style={{...S.inp,width:76,fontSize:17,fontWeight:700,textAlign:"center"}} placeholder="นับ" />
-                <span style={{color:T.textSm,fontSize:12}}>{item.unit}</span>
+                <input type="number" value={val} onChange={e=>setChecked(p=>({...p,[String(item.id)]:e.target.value}))} style={{...S.inp,width:compact?60:76,fontSize:compact?15:17,fontWeight:700,textAlign:"center"}} placeholder="นับ" />
+                <span style={{color:T.textSm,fontSize:compact?10:12}}>{item.unit}</span>
               </div>
             </div>
           </Card>
@@ -992,7 +1047,7 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
   );
 }
 
-function PurchasePage({stock,suppliers,lineToken,user}){
+function PurchasePage({stock,suppliers,lineToken,user,compact}){
   const[sel,setSel]=useState({});const[oQty,setOQty]=useState({});const[note,setNote]=useState("");const[sent,setSent]=useState(false);const[sending,setSending]=useState(false);const[prev,setPrev]=useState(false);
   const need=stock.filter(s=>s.qty<s.minQty);
   const tog=id=>{setSel(p=>({...p,[id]:!p[id]}));if(!oQty[id]){const it=stock.find(s=>s.id===id);if(it)setOQty(p=>({...p,[id]:String(Math.max(it.minQty*2-it.qty,1))}));}};
@@ -1011,11 +1066,11 @@ function PurchasePage({stock,suppliers,lineToken,user}){
             <button onClick={()=>{const s={};const q={};need.forEach(x=>{s[x.id]=true;q[x.id]=String(x.minQty*2-x.qty);});setSel(s);setOQty(q);}} style={{...S.btn(T.red),fontSize:13,padding:"6px 12px"}}>เลือกทั้งหมด</button>
           </div>
           {need.map(s=>{const isSel=sel[s.id];const sup=suppliers.find(x=>x.id===s.supplierId);const isOwner=user?.role==="owner";return(
-            <div key={s.id} style={{background:"#fff",borderRadius:10,padding:"11px 14px",marginBottom:7,border:`2px solid ${isSel?T.orange:T.border}`,cursor:"pointer"}} onClick={()=>tog(s.id)}>
+            <div key={s.id} style={{background:"#fff",borderRadius:10,padding:compact?"7px 10px":"11px 14px",marginBottom:7,border:`2px solid ${isSel?T.orange:T.border}`,cursor:"pointer"}} onClick={()=>tog(s.id)}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div style={{display:"flex",alignItems:"center",gap:9}}>
-                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isSel?T.orange:T.border}`,background:isSel?T.orange:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:"#fff"}}>{isSel?"✓":""}</div>
-                  <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{color:T.textSm,fontSize:12}}>ซัพฯ: {supDisplay(sup,isOwner)}</div></div>
+                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isSel?T.orange:T.border}`,background:isSel?T.orange:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:"#fff",flexShrink:0}}>{isSel?"✓":""}</div>
+                  <div><div style={{fontWeight:700,fontSize:compact?12:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:compact?"nowrap":"normal",maxWidth:compact?160:999}}>{s.name}</div>{!compact&&<div style={{color:T.textSm,fontSize:12}}>ซัพฯ: {supDisplay(sup,isOwner)}</div>}</div>
                 </div>
                 <div style={{textAlign:"right"}}><div style={{color:T.red,fontWeight:700}}>เหลือ {s.qty} {s.unit}</div><div style={{color:T.textXs,fontSize:11}}>ขั้นต่ำ {s.minQty}</div></div>
               </div>
@@ -1638,6 +1693,7 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
 
 export default function App(){
   const[user,setUser]=useState(null);const[page,setPage]=useState("dashboard");
+  const[compact,setCompact]=useState(()=>lsGet("tg_compact",false));
   const[stock,setStock]=useState(()=>lsGet("tg_stock",INIT_STOCK));
   const[cf,setCF]=useState(()=>lsGet("tg_cf",[]));
   const[movements,setMovements]=useState(()=>lsGet("tg_mvs",[]));
@@ -1769,6 +1825,7 @@ export default function App(){
   useEffect(()=>{lsSet("tg_slat",shopLat);if(dbReady)db.upsertSetting("shopLat",shopLat).catch(()=>{});},[shopLat,dbReady]);
   useEffect(()=>{lsSet("tg_slng",shopLng);if(dbReady)db.upsertSetting("shopLng",shopLng).catch(()=>{});},[shopLng,dbReady]);
   useEffect(()=>{lsSet("tg_srad",shopRadius);if(dbReady)db.upsertSetting("shopRadius",shopRadius).catch(()=>{});},[shopRadius,dbReady]);
+  useEffect(()=>lsSet("tg_compact",compact),[compact]);
 
   const saveStock=useCallback(async ns=>{setStock(ns);if(dbReady)db.upsertStock(ns.map(s=>({id:s.id,name:s.name,unit:s.unit,qty:s.qty,min_qty:s.minQty,daily_use:s.dailyUse,supplier_id:s.supplierId||1,cost_history:s.costHistory||[]}))).catch(()=>{});},[dbReady]);
 
@@ -1817,9 +1874,9 @@ export default function App(){
     staffcheckin:<StaffCheckinPage user={user} attendance={attendance} setAttendance={setAttendance} shopLat={shopLat} shopLng={shopLng} shopRadius={shopRadius} />,
     dashboard:<DashboardPage cf={cf} stock={stock} user={user} fixedCosts={fixedCosts} waste={waste} promos={promos} setPage={setPage} />,
     cashflow:<CashflowPage cf={cf} setCF={setCF} user={user} dbReady={dbReady} />,
-    stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} dbReady={dbReady} />,
-    staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} />,
-    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} />,
+    stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} dbReady={dbReady} compact={compact} />,
+    staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} compact={compact} />,
+    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} compact={compact} />,
     report:<ReportPage cf={cf} stock={stock} movements={movements} user={user} fixedCosts={fixedCosts} waste={waste} setWaste={setWaste} promos={promos} setPromos={setPromos} />,
     hr:<HRPage staff={staff} setStaff={setStaff} attendance={attendance} setAttendance={setAttendance} cf={cf} shopLat={shopLat} shopLng={shopLng} />,
     settings:<SettingsPage staff={staff} setStaff={setStaff} lineToken={lineToken} setLineToken={setLineToken} fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} suppliers={suppliers} setSuppliers={setSuppliers} shopLat={shopLat} setShopLat={setShopLat} shopLng={shopLng} setShopLng={setShopLng} shopRadius={shopRadius} setShopRadius={setShopRadius} />,
@@ -1830,7 +1887,10 @@ export default function App(){
       <div style={{background:"#fff",borderBottom:`1px solid ${T.border}`,padding:"10px 16px",display:"flex",alignItems:"center",gap:11,position:"sticky",top:0,zIndex:50,boxShadow:"0 1px 3px rgba(0,0,0,.08)"}}>
         <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${T.orange},${T.orangeDk})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>🫕</div>
         <div><div style={{color:T.orange,fontWeight:900,fontSize:14}}>ไท่กั๋วหม่าล่า</div><div style={{color:T.textXs,fontSize:11}}>{user.name} • {isOwner?"👑":"👷"}{dbReady?" ● DB":""}</div></div>
-        <button onClick={()=>setUser(null)} style={{...S.ghost,fontSize:13,padding:"4px 10px",marginLeft:"auto"}}>ออก</button>
+        <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
+          {(page==="stock"||page==="staffstock"||page==="purchase")&&<button onClick={()=>setCompact(c=>!c)} style={{background:compact?"#f97316":T.bg,border:`1px solid ${compact?"#f97316":T.border}`,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:12,color:compact?"#fff":T.textMd,fontFamily:F,fontWeight:compact?700:400}}>{compact?"☰ ย่อ":"☰ เต็ม"}</button>}
+          <button onClick={()=>setUser(null)} style={{...S.ghost,fontSize:13,padding:"4px 10px"}}>ออก</button>
+        </div>
       </div>
       <div style={{padding:"16px 14px 90px",maxWidth:900,margin:"0 auto"}}>{pages[page]||pages.dashboard}</div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"space-around",padding:"8px 0 14px",zIndex:100,boxShadow:"0 -2px 8px rgba(0,0,0,.06)"}}>
