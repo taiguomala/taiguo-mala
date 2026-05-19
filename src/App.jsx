@@ -330,6 +330,8 @@ function CashflowPage({cf,setCF,user,dbReady}){
   const[openBank,setOpenBank]=useState(0);
   const[showSetup,setShowSetup]=useState(false);
   const[form,setForm]=useState({date:today(),flow:"in",cat:IN_CATS[0],itemName:"",amount:"",method:"เงินสด",note:""});
+  const[syncing,setSyncing]=useState(false);
+  const[syncMsg,setSyncMsg]=useState("");
   const isCash=e=>e.method==="เงินสด";
   const myCF=user.role==="owner"?cf:cf.filter(e=>e.staffId===user.id||e.branch===user.franchiseId);
   const months=[...new Set(myCF.map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
@@ -343,15 +345,54 @@ function CashflowPage({cf,setCF,user,dbReady}){
   let rC=openCash,rB=openBank;
   const dailyRows=allDates.map(d=>{const ent=myCF.filter(e=>e.date===d);const dCI=sum(ent,"in",isCash),dCO=sum(ent,"out",isCash),dBI=sum(ent,"in",e=>!isCash(e)),dBO=sum(ent,"out",e=>!isCash(e));rC+=dCI-dCO;rB+=dBI-dBO;return{d,ent,dCI,dCO,dBI,dBO,balCash:rC,balBank:rB};});
   const dispDays=[...(fMode==="day"?dailyRows.filter(r=>r.d===fDay):dailyRows.filter(r=>r.d.startsWith(fMonth)))].reverse();
-  const addEntry=async()=>{if(!form.amount||!+form.amount)return;const entry={...form,id:Date.now(),amount:+form.amount,branch:user.franchiseId||"main",staffId:user.id};setCF(p=>[entry,...p]);setShowForm(false);setForm({date:today(),flow:"in",cat:IN_CATS[0],itemName:"",amount:"",method:"เงินสด",note:""});if(dbReady)db.addCF({id:entry.id,date:entry.date,flow:entry.flow,cat:entry.cat,item_name:entry.itemName,amount:entry.amount,method:entry.method,note:entry.note,branch:entry.branch,staff_id:entry.staffId}).catch(()=>{});};
+
+  const toDB=e=>({id:e.id,date:e.date,flow:e.flow,cat:e.cat,item_name:e.itemName||"",amount:e.amount,method:e.method,note:e.note||"",branch:e.branch||"main",staff_id:e.staffId||"owner"});
+
+  const addEntry=async()=>{
+    if(!form.amount||!+form.amount)return;
+    const entry={...form,id:Date.now(),amount:+form.amount,branch:user.franchiseId||"main",staffId:user.id};
+    setCF(p=>[entry,...p]);
+    setShowForm(false);
+    setForm({date:today(),flow:"in",cat:IN_CATS[0],itemName:"",amount:"",method:"เงินสด",note:""});
+    if(dbReady)db.addCF(toDB(entry)).catch(()=>{});
+  };
   const delEntry=id=>{setCF(p=>p.filter(e=>e.id!==id));if(dbReady)db.delCF(id).catch(()=>{});};
   const clearAll=()=>{if(!window.confirm("ล้าง Cash Flow ทั้งหมด?"))return;setCF([]);if(dbReady)db.clearCF().catch(()=>{});};
+
+  const manualSync=async()=>{
+    setSyncing(true);setSyncMsg("");
+    try{
+      // clear แล้ว insert ใหม่ทั้งหมด
+      await db.clearCF();
+      // insert เป็น batch ทีละ 50
+      const chunks=[];for(let i=0;i<cf.length;i+=50)chunks.push(cf.slice(i,i+50));
+      for(const chunk of chunks){
+        await sb("cashflow",{method:"POST",body:JSON.stringify(chunk.map(toDB)),headers:{Prefer:"resolution=merge-duplicates,return=representation"}});
+      }
+      setSyncMsg("✅ บันทึกสำเร็จ!");
+    }catch{setSyncMsg("❌ บันทึกไม่สำเร็จ");}
+    setSyncing(false);
+    setTimeout(()=>setSyncMsg(""),3000);
+  };
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {syncMsg&&<div style={{background:syncMsg.startsWith("✅")?T.greenLt:T.redLt,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,color:syncMsg.startsWith("✅")?T.green:T.red}}>{syncMsg}</div>}
       <Hdr title="💵 Cash Flow" action={<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         <button onClick={()=>setShowSetup(!showSetup)} style={{...S.ghost,fontSize:13,padding:"7px 10px"}}>⚙️ ยอดเปิด</button>
-        <IEBtn onExport={()=>exportXlsx(cf.map(e=>({วันที่:e.date,ประเภท:e.flow==="in"?"รายรับ":"รายจ่าย",หมวด:e.cat,ชื่อ:e.itemName||"",จำนวน:e.amount,ช่องทาง:e.method})),"cashflow","cashflow")} onImport={rows=>{const m=rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),flow:r["ประเภท"]==="รายรับ"?"in":"out",cat:r["หมวด"]||IN_CATS[0],itemName:r["ชื่อ"]||"",amount:+r["จำนวน"]||0,method:r["ช่องทาง"]||"เงินสด",note:"",branch:"main",staffId:"owner"})).filter(r=>r.amount>0);setCF(p=>[...m,...p]);alert(`นำเข้า ${m.length} รายการ`);}} />
+        <IEBtn onExport={()=>exportXlsx(cf.map(e=>({วันที่:e.date,ประเภท:e.flow==="in"?"รายรับ":"รายจ่าย",หมวด:e.cat,ชื่อ:e.itemName||"",จำนวน:e.amount,ช่องทาง:e.method})),"cashflow","cashflow")} onImport={async rows=>{
+          const m=rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),flow:r["ประเภท"]==="รายรับ"?"in":"out",cat:r["หมวด"]||IN_CATS[0],itemName:r["ชื่อ"]||"",amount:+r["จำนวน"]||0,method:r["ช่องทาง"]||"เงินสด",note:"",branch:"main",staffId:"owner"})).filter(r=>r.amount>0);
+          const newCF=[...m,...cf];
+          setCF(newCF);
+          if(dbReady){
+            try{
+              for(const entry of m) await db.addCF(toDB(entry)).catch(()=>{});
+            }catch{}
+          }
+          alert(`✅ นำเข้า ${m.length} รายการ`);
+        }} />
         {user.role==="owner"&&<button onClick={clearAll} style={{...S.btn(T.red),fontSize:13,padding:"7px 10px"}}>🗑 ล้าง</button>}
+        {dbReady&&<button onClick={manualSync} disabled={syncing} style={{...S.btn(T.blue),fontSize:13,padding:"7px 10px",opacity:syncing?0.6:1}}>{syncing?"⏳...":"💾 บันทึก"}</button>}
         <button onClick={()=>setShowForm(!showForm)} style={S.btn()}>+ กรอก</button>
       </div>} />
       {showSetup&&<Card style={{borderColor:T.borderOr,background:T.orangeLt}}>
