@@ -273,6 +273,10 @@ function DashboardPage({cf,stock,user,fixedCosts,waste,promos,setPage}){
 
 function CashflowPage({cf,setCF,user,dbReady}){
   const[showForm,setShowForm]=useState(false);
+  const[syncMsg,setSyncMsg]=useState("");
+  const[syncing,setSyncing]=useState(false);
+  const toDB=e=>({id:e.id,date:e.date,flow:e.flow,cat:e.cat,item_name:e.itemName||"",amount:e.amount,method:e.method,note:e.note||"",branch:e.branch||"main",staff_id:e.staffId||"owner"});
+  const manualSync=async()=>{setSyncing(true);setSyncMsg("");try{await db.clearCF();const chunks=[];for(let i=0;i<cf.length;i+=50)chunks.push(cf.slice(i,i+50));for(const ch of chunks)await sb("cashflow",{method:"POST",body:JSON.stringify(ch.map(toDB)),headers:{Prefer:"resolution=merge-duplicates,return=representation"}});setSyncMsg("ok");}catch{setSyncMsg("err");}setSyncing(false);setTimeout(()=>setSyncMsg(""),3000);};
   const[viewTab,setViewTab]=useState("daily");
   const[fMode,setFMode]=useState("month");
   const[fMonth,setFMonth]=useState(today().slice(0,7));
@@ -299,9 +303,11 @@ function CashflowPage({cf,setCF,user,dbReady}){
   const clearAll=()=>{if(!window.confirm("ล้าง Cash Flow ทั้งหมด?"))return;setCF([]);if(dbReady)db.clearCF().catch(()=>{});};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {syncMsg&&<div style={{background:syncMsg==="ok"?"#f0fdf4":"#fef2f2",borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,color:syncMsg==="ok"?"#16a34a":"#dc2626"}}>{syncMsg==="ok"?"✅ บันทึกสำเร็จ!":"❌ บันทึกไม่สำเร็จ"}</div>}
       <Hdr title="💵 Cash Flow" action={<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {dbReady&&<button onClick={manualSync} disabled={syncing} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",cursor:syncing?"default":"pointer",fontWeight:700,fontSize:13,fontFamily:F,opacity:syncing?0.6:1}}>{syncing?"⏳...":"💾 บันทึก"}</button>}
         <button onClick={()=>setShowSetup(!showSetup)} style={{...S.ghost,fontSize:13,padding:"7px 10px"}}>⚙️ ยอดเปิด</button>
-        <IEBtn onExport={()=>exportXlsx(cf.map(e=>({วันที่:e.date,ประเภท:e.flow==="in"?"รายรับ":"รายจ่าย",หมวด:e.cat,ชื่อ:e.itemName||"",จำนวน:e.amount,ช่องทาง:e.method})),"cashflow","cashflow")} onImport={rows=>{const m=rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),flow:r["ประเภท"]==="รายรับ"?"in":"out",cat:r["หมวด"]||IN_CATS[0],itemName:r["ชื่อ"]||"",amount:+r["จำนวน"]||0,method:r["ช่องทาง"]||"เงินสด",note:"",branch:"main",staffId:"owner"})).filter(r=>r.amount>0);setCF(p=>[...m,...p]);alert(`นำเข้า ${m.length} รายการ`);}} />
+        <IEBtn onExport={()=>exportXlsx(cf.map(e=>({วันที่:e.date,ประเภท:e.flow==="in"?"รายรับ":"รายจ่าย",หมวด:e.cat,ชื่อ:e.itemName||"",จำนวน:e.amount,ช่องทาง:e.method})),"cashflow","cashflow")} onImport={async rows=>{const m=rows.map(r=>({id:Date.now()+Math.random(),date:r["วันที่"]||today(),flow:r["ประเภท"]==="รายรับ"?"in":"out",cat:r["หมวด"]||IN_CATS[0],itemName:r["ชื่อ"]||"",amount:+r["จำนวน"]||0,method:r["ช่องทาง"]||"เงินสด",note:"",branch:"main",staffId:"owner"})).filter(r=>r.amount>0);setCF(p=>[...m,...p]);if(dbReady){for(const e of m)db.addCF({id:e.id,date:e.date,flow:e.flow,cat:e.cat,item_name:e.itemName,amount:e.amount,method:e.method,note:e.note,branch:e.branch,staff_id:e.staffId}).catch(()=>{});}alert(`✅ นำเข้า ${m.length} รายการ`);}} />
         {user.role==="owner"&&<button onClick={clearAll} style={{...S.btn(T.red),fontSize:13,padding:"7px 10px"}}>🗑 ล้าง</button>}
         <button onClick={()=>setShowForm(!showForm)} style={S.btn()}>+ กรอก</button>
       </div>} />
@@ -405,17 +411,23 @@ function CashflowPage({cf,setCF,user,dbReady}){
   );
 }
 
-function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
-  const[tab,setTab]=useState("list");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1});
+function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady}){
+  const[tab,setTab]=useState("list");
+  const[syncMsg,setSyncMsg]=useState("");
+  const[syncing,setSyncing]=useState(false);
+  const saveAndSync=async(ns)=>{setStock(ns);if(dbReady)db.upsertStock(ns.map(s=>({id:s.id,name:s.name,unit:s.unit,qty:s.qty,min_qty:s.minQty,daily_use:s.dailyUse,supplier_id:s.supplierId||1,cost_history:s.costHistory||[],category:s.category||""}))).catch(()=>{});};
+  const manualSync=async()=>{setSyncing(true);setSyncMsg("");try{await db.upsertStock(stock.map(s=>({id:s.id,name:s.name,unit:s.unit,qty:s.qty,min_qty:s.minQty,daily_use:s.dailyUse,supplier_id:s.supplierId||1,cost_history:s.costHistory||[],category:s.category||""})));setSyncMsg("ok");}catch{setSyncMsg("err");}setSyncing(false);setTimeout(()=>setSyncMsg(""),3000);};const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1});
   const[search,setSearch]=useState("");
   const canPrice=user.perms?.viewPrice;const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
   const showMsg=(t,ok)=>{setMsg({t,ok});setTimeout(()=>setMsg({t:"",ok:false}),3000);};
   const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}const uc=parseFloat(cost)||0;const nh=mvType==="in"&&uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:q,total:uc*q}]:item.costHistory;setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q,costHistory:nh}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:uc,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setCost("");setNote("");};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {syncMsg&&<div style={{background:syncMsg==="ok"?"#f0fdf4":"#fef2f2",borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,color:syncMsg==="ok"?"#16a34a":"#dc2626"}}>{syncMsg==="ok"?"✅ บันทึกสำเร็จ!":"❌ บันทึกไม่สำเร็จ"}</div>}
       <Hdr title="📦 สต็อค" action={<div style={{display:"flex",gap:6}}>
-        <IEBtn onExport={()=>exportXlsx(stock.map(s=>({ชื่อ:s.name,หน่วย:s.unit,จำนวน:s.qty,ขั้นต่ำ:s.minQty,ใช้ต่อวัน:s.dailyUse})),"stock","stock")} onImport={rows=>{let a=0,u=0;const ns=[...stock];rows.forEach(r=>{const name=r["ชื่อ"]||r["name"]||"";if(!name)return;const idx=ns.findIndex(s=>s.name===name);if(idx>=0){if(r["จำนวน"]!==undefined)ns[idx]={...ns[idx],qty:+r["จำนวน"]};u++;}else{ns.push({id:Date.now()+Math.random(),name,unit:r["หน่วย"]||"kg",qty:+(r["จำนวน"]||0),minQty:+(r["ขั้นต่ำ"]||3),dailyUse:+(r["ใช้ต่อวัน"]||1),supplierId:1,costHistory:[]});a++;}});setStock(ns);alert(`เพิ่ม ${a} อัพเดท ${u}`);}} />
-        {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{setStock(INIT_STOCK);setMovements([]);}} />}
+        {dbReady&&<button onClick={manualSync} disabled={syncing} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",cursor:syncing?"default":"pointer",fontWeight:700,fontSize:13,fontFamily:F,opacity:syncing?0.6:1}}>{syncing?"⏳...":"💾 บันทึก"}</button>}
+        <IEBtn onExport={()=>exportXlsx(stock.map(s=>({ชื่อ:s.name,หน่วย:s.unit,จำนวน:s.qty,ขั้นต่ำ:s.minQty,ใช้ต่อวัน:s.dailyUse})),"stock","stock")} onImport={rows=>{let a=0,u=0;const ns=[...stock];rows.forEach(r=>{const name=r["ชื่อ"]||r["name"]||"";if(!name)return;const idx=ns.findIndex(s=>s.name===name);if(idx>=0){if(r["จำนวน"]!==undefined)ns[idx]={...ns[idx],qty:+r["จำนวน"]};u++;}else{ns.push({id:Date.now()+Math.random(),name,unit:r["หน่วย"]||"kg",qty:+(r["จำนวน"]||0),minQty:+(r["ขั้นต่ำ"]||3),dailyUse:+(r["ใช้ต่อวัน"]||1),supplierId:1,costHistory:[]});a++;}});saveAndSync(ns);alert(`เพิ่ม ${a} อัพเดท ${u}`);}} />
+        {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{saveAndSync(INIT_STOCK);setMovements([]);}} />}
         <button onClick={()=>setShowAdd(!showAdd)} style={S.btn()}>+ เพิ่ม</button>
       </div>} />
       {showAdd&&<Card style={{borderColor:T.borderOr}}>
@@ -426,7 +438,7 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
           ))}
         </div>
         <div style={{display:"flex",gap:8,marginTop:10}}>
-          <button onClick={()=>{const uc2=canPrice&&newItem.initCost?+newItem.initCost:0;const q2=+newItem.qty||0;const h2=uc2>0&&q2>0?[{date:today(),unitCost:uc2,qty:q2,total:uc2*q2}]:[];saveStock([...stock,{...newItem,id:Date.now(),qty:q2,minQty:+newItem.minQty,dailyUse:+newItem.dailyUse,category:newItem.category||"",costHistory:h2}]);setShowAdd(false);}} style={{...S.btn(),flex:1}}>บันทึก</button>
+          <button onClick={()=>{const uc2=canPrice&&newItem.initCost?+newItem.initCost:0;const q2=+newItem.qty||0;const h2=uc2>0&&q2>0?[{date:today(),unitCost:uc2,qty:q2,total:uc2*q2}]:[];saveAndSync([...stock,{...newItem,id:Date.now(),qty:q2,minQty:+newItem.minQty,dailyUse:+newItem.dailyUse,category:newItem.category||"",costHistory:h2}]);setShowAdd(false);}} style={{...S.btn(),flex:1}}>บันทึก</button>
           <button onClick={()=>setShowAdd(false)} style={S.ghost}>ยกเลิก</button>
         </div>
       </Card>}
@@ -455,12 +467,12 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers}){
                 <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
               ))}
             </div>
-            <div style={{display:"flex",gap:8}}><button onClick={()=>{setStock(p=>p.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
+            <div style={{display:"flex",gap:8}}><button onClick={()=>{saveAndSync(stock.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
           </div>
         ):(
           <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
             <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
-            <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))setStock(p=>p.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
+            <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))saveAndSync(stock.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
           </div>
         )}
       </Card>);})}
@@ -573,12 +585,12 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
   );
 }
 
-function PurchasePage({stock,suppliers,lineToken}){
+function PurchasePage({stock,suppliers,lineToken,user}){
   const[sel,setSel]=useState({});const[oQty,setOQty]=useState({});const[note,setNote]=useState("");const[sent,setSent]=useState(false);const[sending,setSending]=useState(false);const[prev,setPrev]=useState(false);
   const need=stock.filter(s=>s.qty<s.minQty);
   const tog=id=>{setSel(p=>({...p,[id]:!p[id]}));if(!oQty[id]){const it=stock.find(s=>s.id===id);if(it)setOQty(p=>({...p,[id]:String(Math.max(it.minQty*2-it.qty,1))}));}};
   const selItems=stock.filter(s=>sel[s.id]);
-  const buildMsg=()=>{const lines=["🛒 ใบสั่งซื้อ",`📅 ${today()}`,"─────────"];const bySup={};selItems.forEach(it=>{const sn=suppliers.find(x=>x.id===it.supplierId)?.name||"ไม่ระบุ";if(!bySup[sn])bySup[sn]=[];bySup[sn].push(it);});Object.entries(bySup).forEach(([sn,items])=>{lines.push(`\n🏪 ${sn}`);items.forEach(it=>lines.push(`  • ${it.name}: ${oQty[it.id]||it.minQty} ${it.unit} (มี ${it.qty})`));});if(note)lines.push(`\n📝 ${note}`);lines.push("\n─────────\nไท่กั๋วหม่าล่า");return lines.join("\n");};
+  const buildMsg=()=>{const lines=["🛒 ใบสั่งซื้อ",`📅 ${today()}`,"─────────"];const bySup={};selItems.forEach(it=>{const supObj=suppliers.find(x=>x.id===it.supplierId);const sn=supDisplay(supObj,true)||"ไม่ระบุ";if(!bySup[sn])bySup[sn]=[];bySup[sn].push(it);});Object.entries(bySup).forEach(([sn,items])=>{lines.push(`\n🏪 ${sn}`);items.forEach(it=>lines.push(`  • ${it.name}: ${oQty[it.id]||it.minQty} ${it.unit} (มี ${it.qty})`));});if(note)lines.push(`\n📝 ${note}`);lines.push("\n─────────\nไท่กั๋วหม่าล่า");return lines.join("\n");};
   const send=async()=>{if(!lineToken){alert("ตั้งค่า LINE Token ก่อน");return;}if(!selItems.length){alert("เลือกรายการก่อน");return;}setSending(true);try{const r=await fetch("https://notify-api.line.me/api/notify",{method:"POST",headers:{"Authorization":`Bearer ${lineToken}`,"Content-Type":"application/x-www-form-urlencoded"},body:`message=${encodeURIComponent(buildMsg())}`});if(r.ok){setSent(true);setTimeout(()=>setSent(false),5000);}else alert("ส่งไม่สำเร็จ");}catch{alert("ผิดพลาด");}setSending(false);};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -1394,9 +1406,9 @@ export default function App(){
     staffcheckin:<StaffCheckinPage user={user} attendance={attendance} setAttendance={setAttendance} shopLat={shopLat} shopLng={shopLng} shopRadius={shopRadius} />,
     dashboard:<DashboardPage cf={cf} stock={stock} user={user} fixedCosts={fixedCosts} waste={waste} promos={promos} setPage={setPage} />,
     cashflow:<CashflowPage cf={cf} setCF={setCF} user={user} dbReady={dbReady} />,
-    stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} />,
+    stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} dbReady={dbReady} />,
     staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} />,
-    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} />,
+    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} />,
     report:<ReportPage cf={cf} stock={stock} movements={movements} user={user} fixedCosts={fixedCosts} waste={waste} setWaste={setWaste} promos={promos} setPromos={setPromos} />,
     hr:<HRPage staff={staff} setStaff={setStaff} attendance={attendance} setAttendance={setAttendance} cf={cf} shopLat={shopLat} shopLng={shopLng} />,
     settings:<SettingsPage staff={staff} setStaff={setStaff} lineToken={lineToken} setLineToken={setLineToken} fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} suppliers={suppliers} setSuppliers={setSuppliers} shopLat={shopLat} setShopLat={setShopLat} shopLng={shopLng} setShopLng={setShopLng} shopRadius={shopRadius} setShopRadius={setShopRadius} />,
