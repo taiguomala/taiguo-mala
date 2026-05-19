@@ -466,12 +466,35 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
               {[["ชื่อ","name","text"],["หน่วย","unit","text"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
                 <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
               ))}
+              {canPrice&&<div style={{gridColumn:"1/-1",background:T.orangeLt,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{color:T.orange,fontWeight:700,fontSize:12,marginBottom:6}}>💰 อัปเดตราคาต้นทุน</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"flex-end"}}>
+                  <div>
+                    <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>WAC ปัจจุบัน</div>
+                    <div style={{fontWeight:800,fontSize:16,color:T.orange}}>{wac(item)>0?`฿${wac(item).toFixed(2)}`:"ยังไม่มีราคา"}</div>
+                    <div style={{color:T.textXs,fontSize:10}}>/{editData.unit??item.unit}</div>
+                  </div>
+                  <div>
+                    <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>ราคาใหม่/หน่วย <span style={{color:T.textXs}}>(ไม่บังคับ)</span></div>
+                    <input type="number" value={editData.newCost||""} onChange={e=>setEditData(p=>({...p,newCost:e.target.value}))} style={{...S.inp,borderColor:T.orange}} placeholder="0" />
+                  </div>
+                </div>
+                {editData.newCost&&+editData.newCost>0&&wac(item)>0&&<div style={{marginTop:6,fontSize:11,fontWeight:600,color:(+editData.newCost-wac(item))/wac(item)>0.1?T.red:T.green}}>{((+editData.newCost-wac(item))/wac(item)*100)>0?`▲ สูงกว่า WAC ${((+editData.newCost-wac(item))/wac(item)*100).toFixed(1)}%`:`▼ ต่ำกว่า WAC ${Math.abs((+editData.newCost-wac(item))/wac(item)*100).toFixed(1)}%`}</div>}
+              </div>}
             </div>
-            <div style={{display:"flex",gap:8}}><button onClick={()=>{saveAndSync(stock.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse}:s));setEditId(null);setEditData({});}} style={{...S.btn(),flex:1}}>บันทึก</button><button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button></div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{
+                const uc=canPrice&&editData.newCost&&+editData.newCost>0?+editData.newCost:0;
+                const newHistory=uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:item.qty,total:uc*item.qty}]:item.costHistory||[];
+                saveAndSync(stock.map(s=>s.id===item.id?{...s,...editData,minQty:+editData.minQty||s.minQty,dailyUse:+editData.dailyUse||s.dailyUse,costHistory:newHistory}:s));
+                setEditId(null);setEditData({});
+              }} style={{...S.btn(),flex:1}}>บันทึก</button>
+              <button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button>
+            </div>
           </div>
         ):(
           <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
-            <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
+            <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse,newCost:""});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
             <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))saveAndSync(stock.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
           </div>
         )}
