@@ -332,6 +332,7 @@ function CashflowPage({cf,setCF,user,dbReady}){
   const[form,setForm]=useState({date:today(),flow:"in",cat:IN_CATS[0],itemName:"",amount:"",method:"เงินสด",note:""});
   const[syncing,setSyncing]=useState(false);
   const[syncMsg,setSyncMsg]=useState("");
+  const[compact,setCompact]=useState(()=>lsGet("tg_sc",false));
   const isCash=e=>e.method==="เงินสด";
   const myCF=user.role==="owner"?cf:cf.filter(e=>e.staffId===user.id||e.branch===user.franchiseId);
   const months=[...new Set(myCF.map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
@@ -495,7 +496,7 @@ function CashflowPage({cf,setCF,user,dbReady}){
   );
 }
 
-function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady,compact}){
+function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady}){
   const[tab,setTab]=useState("list");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[cost,setCost]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[editId,setEditId]=useState(null);const[editData,setEditData]=useState({});const[showAdd,setShowAdd]=useState(false);const[newItem,setNewItem]=useState({name:"",unit:"kg",qty:0,minQty:3,dailyUse:1,supplierId:1,category:"",initCost:""});
   const[search,setSearch]=useState("");
   const[catView,setCatView]=useState("total");
@@ -573,6 +574,7 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
           }}
         />
         {user.role==="owner"&&<ClearBtn label="สต็อคและประวัติ" onClear={()=>{saveAndSync(INIT_STOCK);setMovements([]);}} />}
+        <button onClick={()=>{const n=!compact;setCompact(n);lsSet("tg_sc",n);}} style={{...S.ghost,fontSize:12,padding:"5px 10px",background:compact?T.orangeLt:"transparent",border:`1px solid ${compact?T.orange:T.border}`,color:compact?T.orange:T.textMd,fontWeight:compact?700:400}}>{compact?"☰ ขยาย":"☰ ย่อ"}</button>
         <button onClick={()=>setShowAdd(!showAdd)} style={S.btn()}>+ เพิ่ม</button>
       </div>} />
       {user.role==="owner"&&(()=>{
@@ -973,7 +975,8 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
   );
 }
 
-function StaffStockPage({stock,setStock,movements,setMovements,user,compact}){
+function StaffStockPage({stock,setStock,movements,setMovements,user}){
+  const[compact,setCompact]=useState(()=>lsGet("tg_sc",false));
   const[tab,setTab]=useState("quick");const[selId,setSelId]=useState("");const[mvType,setMvType]=useState("in");const[qty,setQty]=useState("");const[note,setNote]=useState("");const[msg,setMsg]=useState({t:"",ok:false});const[checked,setChecked]=useState({});const[done,setDone]=useState(false);
   const[search2,setSearch2]=useState("");
   const selItem=selId?stock.find(s=>String(s.id)===String(selId)):null;
@@ -981,7 +984,7 @@ function StaffStockPage({stock,setStock,movements,setMovements,user,compact}){
   const save=()=>{const q=parseFloat(qty);if(!selId||!q||q<=0){showMsg("กรุณาเลือกรายการและกรอกจำนวน",false);return;}const item=stock.find(s=>String(s.id)===String(selId));if(!item)return;if(mvType==="out"&&q>item.qty){showMsg(`มีแค่ ${item.qty} ${item.unit}`,false);return;}setStock(stock.map(s=>String(s.id)===String(selId)?{...s,qty:mvType==="in"?s.qty+q:s.qty-q}:s));setMovements(p=>[...p,{id:Date.now(),itemId:item.id,type:mvType,qty:q,unitCost:0,date:today(),staffId:user.id,note:note||(mvType==="in"?"รับเข้า":"จ่ายออก"),branch:"main"}]);showMsg(`✅ ${item.name} ${q} ${item.unit}`,true);setQty("");setNote("");};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div><div style={{fontSize:21,fontWeight:900}}>📦 บันทึกสต็อค</div><div style={{color:T.textSm,fontSize:13}}>สวัสดี {user.name} • {today()}</div></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:21,fontWeight:900}}>📦 บันทึกสต็อค</div><div style={{color:T.textSm,fontSize:13}}>สวัสดี {user.name} • {today()}</div></div><button onClick={()=>{const n=!compact;setCompact(n);lsSet("tg_sc",n);}} style={{...S.ghost,fontSize:12,padding:"5px 10px",background:compact?T.orangeLt:"transparent",border:`1px solid ${compact?T.orange:T.border}`,color:compact?T.orange:T.textMd,fontWeight:compact?700:400}}>{compact?"☰ ขยาย":"☰ ย่อ"}</button></div>
       {stock.filter(s=>["critical","out"].includes(stockSt(s))).length>0&&<Card style={{background:T.redLt,borderColor:T.red+"44"}}>
         <div style={{color:T.red,fontWeight:800,fontSize:14,marginBottom:5}}>🚨 แจ้งเจ้าของด่วน!</div>
         {stock.filter(s=>["critical","out"].includes(stockSt(s))).map(s=><div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:14}}><span style={{fontWeight:600}}>{s.name}</span><span style={{color:T.red,fontWeight:700}}>{s.qty} {s.unit}</span></div>)}
@@ -1047,7 +1050,8 @@ function StaffStockPage({stock,setStock,movements,setMovements,user,compact}){
   );
 }
 
-function PurchasePage({stock,suppliers,lineToken,user,compact}){
+function PurchasePage({stock,suppliers,lineToken,user}){
+  const[compact,setCompact]=useState(()=>lsGet("tg_sc",false));
   const[sel,setSel]=useState({});const[oQty,setOQty]=useState({});const[note,setNote]=useState("");const[sent,setSent]=useState(false);const[sending,setSending]=useState(false);const[prev,setPrev]=useState(false);
   const need=stock.filter(s=>s.qty<s.minQty);
   const tog=id=>{setSel(p=>({...p,[id]:!p[id]}));if(!oQty[id]){const it=stock.find(s=>s.id===id);if(it)setOQty(p=>({...p,[id]:String(Math.max(it.minQty*2-it.qty,1))}));}};
@@ -1057,7 +1061,7 @@ function PurchasePage({stock,suppliers,lineToken,user,compact}){
   const send=async()=>{if(!lineToken){alert("ตั้งค่า LINE Token ก่อน");return;}if(!selItems.length){alert("เลือกรายการก่อน");return;}setSending(true);try{const r=await fetch("https://notify-api.line.me/api/notify",{method:"POST",headers:{"Authorization":`Bearer ${lineToken}`,"Content-Type":"application/x-www-form-urlencoded"},body:`message=${encodeURIComponent(buildMsg())}`});if(r.ok){setSent(true);setTimeout(()=>setSent(false),5000);}else alert("ส่งไม่สำเร็จ");}catch{alert("ผิดพลาด");}setSending(false);};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Hdr title="🛒 สั่งซื้อวัตถุดิบ" />
+      <Hdr title="🛒 สั่งซื้อวัตถุดิบ" action={<button onClick={()=>{const n=!compact;setCompact(n);lsSet("tg_sc",n);}} style={{...S.ghost,fontSize:12,padding:"5px 10px",background:compact?T.orangeLt:"transparent",border:`1px solid ${compact?T.orange:T.border}`,color:compact?T.orange:T.textMd,fontWeight:compact?700:400}}>{compact?"☰ ขยาย":"☰ ย่อ"}</button>} />
       {sent&&<div style={{background:T.greenLt,borderRadius:10,padding:"12px 16px",color:T.green,fontWeight:800}}>✅ ส่ง LINE สำเร็จ!</div>}
       {need.length>0?(
         <Card style={{borderColor:T.red+"44",background:T.redLt}}>
@@ -1693,7 +1697,6 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
 
 export default function App(){
   const[user,setUser]=useState(null);const[page,setPage]=useState("dashboard");
-  const[compact,setCompact]=useState(()=>lsGet("tg_compact",false));
   const[stock,setStock]=useState(()=>lsGet("tg_stock",INIT_STOCK));
   const[cf,setCF]=useState(()=>lsGet("tg_cf",[]));
   const[movements,setMovements]=useState(()=>lsGet("tg_mvs",[]));
@@ -1825,7 +1828,6 @@ export default function App(){
   useEffect(()=>{lsSet("tg_slat",shopLat);if(dbReady)db.upsertSetting("shopLat",shopLat).catch(()=>{});},[shopLat,dbReady]);
   useEffect(()=>{lsSet("tg_slng",shopLng);if(dbReady)db.upsertSetting("shopLng",shopLng).catch(()=>{});},[shopLng,dbReady]);
   useEffect(()=>{lsSet("tg_srad",shopRadius);if(dbReady)db.upsertSetting("shopRadius",shopRadius).catch(()=>{});},[shopRadius,dbReady]);
-  useEffect(()=>lsSet("tg_compact",compact),[compact]);
 
   const saveStock=useCallback(async ns=>{setStock(ns);if(dbReady)db.upsertStock(ns.map(s=>({id:s.id,name:s.name,unit:s.unit,qty:s.qty,min_qty:s.minQty,daily_use:s.dailyUse,supplier_id:s.supplierId||1,cost_history:s.costHistory||[]}))).catch(()=>{});},[dbReady]);
 
@@ -1874,9 +1876,9 @@ export default function App(){
     staffcheckin:<StaffCheckinPage user={user} attendance={attendance} setAttendance={setAttendance} shopLat={shopLat} shopLng={shopLng} shopRadius={shopRadius} />,
     dashboard:<DashboardPage cf={cf} stock={stock} user={user} fixedCosts={fixedCosts} waste={waste} promos={promos} setPage={setPage} />,
     cashflow:<CashflowPage cf={cf} setCF={setCF} user={user} dbReady={dbReady} />,
-    stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} dbReady={dbReady} compact={compact} />,
-    staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} compact={compact} />,
-    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} compact={compact} />,
+    stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} dbReady={dbReady} />,
+    staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} />,
+    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} />,
     report:<ReportPage cf={cf} stock={stock} movements={movements} user={user} fixedCosts={fixedCosts} waste={waste} setWaste={setWaste} promos={promos} setPromos={setPromos} />,
     hr:<HRPage staff={staff} setStaff={setStaff} attendance={attendance} setAttendance={setAttendance} cf={cf} shopLat={shopLat} shopLng={shopLng} />,
     settings:<SettingsPage staff={staff} setStaff={setStaff} lineToken={lineToken} setLineToken={setLineToken} fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} suppliers={suppliers} setSuppliers={setSuppliers} shopLat={shopLat} setShopLat={setShopLat} shopLng={shopLng} setShopLng={setShopLng} shopRadius={shopRadius} setShopRadius={setShopRadius} />,
@@ -1888,7 +1890,6 @@ export default function App(){
         <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${T.orange},${T.orangeDk})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>🫕</div>
         <div><div style={{color:T.orange,fontWeight:900,fontSize:14}}>ไท่กั๋วหม่าล่า</div><div style={{color:T.textXs,fontSize:11}}>{user.name} • {isOwner?"👑":"👷"}{dbReady?" ● DB":""}</div></div>
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
-          {(page==="stock"||page==="staffstock"||page==="purchase")&&<button onClick={()=>setCompact(c=>!c)} style={{background:compact?"#f97316":T.bg,border:`1px solid ${compact?"#f97316":T.border}`,borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:12,color:compact?"#fff":T.textMd,fontFamily:F,fontWeight:compact?700:400}}>{compact?"☰ ย่อ":"☰ เต็ม"}</button>}
           <button onClick={()=>setUser(null)} style={{...S.ghost,fontSize:13,padding:"4px 10px"}}>ออก</button>
         </div>
       </div>
