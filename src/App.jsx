@@ -756,104 +756,109 @@ function StockPage({stock,setStock,movements,setMovements,user,suppliers,dbReady
           <span style={{color:T.orange,fontWeight:800,fontSize:15}}>฿{fmt(catVal)}</span>
         </div>}
         {filtered.length===0&&<div style={{textAlign:"center",padding:24,color:T.textSm}}>ไม่พบสินค้าในหมวดนี้</div>}
-        {filtered.map(item=>{const st=stockSt(item);const sup=suppliers?.find(x=>x.id===item.supplierId);const isOwner=user.role==="owner";const itemVal=wac(item)*item.qty;const vola=costVolatility(item);const trend=costTrend(item);const isHighCost=trend>15;const isVolatile=vola>20;return(<Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":isHighCost||isVolatile?T.yellow+"66":T.border,padding:compact?"8px 12px":"16px 18px"}}>
-          {compact?(
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"nowrap",overflow:"hidden"}}>
-                  <span style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</span>
-                  <Badge status={st} />
-                  {item.category&&<span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"0 5px",fontSize:10,fontWeight:600,flexShrink:0}}>{item.category}</span>}
-                </div>
-                <div style={{color:T.textXs,fontSize:10,marginTop:1}}>
-                  ขั้นต่ำ {item.minQty}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}
-                  {isHighCost&&canPrice&&<span style={{color:T.red}}> 📈</span>}{isVolatile&&canPrice&&<span style={{color:T.yellow}}> ⚡</span>}
-                </div>
-              </div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <span style={{color:ST_C[st],fontWeight:900,fontSize:18}}>{item.qty} <span style={{fontSize:11,fontWeight:400}}>{item.unit}</span></span>
-                {canPrice&&itemVal>0&&<div style={{color:T.orange,fontSize:10,fontWeight:700}}>฿{fmt(itemVal)}</div>}
-              </div>
-            </div>
-          ):(
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontWeight:700,fontSize:16}}>{item.name}</span>
-                <Badge status={st} />
-                {item.category&&<span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:600}}>{item.category}</span>}
-                {isHighCost&&canPrice&&<span style={{background:T.redLt,color:T.red,borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:700}}>📈 ต้นทุนสูง +{trend.toFixed(0)}%</span>}
-                {isVolatile&&canPrice&&<span style={{background:T.yellowLt,color:T.yellow,borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:700}}>⚡ ผันผวน {vola.toFixed(0)}%</span>}
-              </div>
-              <div style={{color:T.textSm,fontSize:13,marginTop:3}}>ซัพฯ: {supDisplay(sup,isOwner)} • ใช้/วัน {item.dailyUse}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}</div>
-              <div style={{color:T.textXs,fontSize:12,marginTop:2}}>ขั้นต่ำ {item.minQty} • เหลือ {item.dailyUse>0?(item.qty/item.dailyUse).toFixed(1):"∞"} วัน</div>
-              {canPrice&&itemVal>0&&<div style={{marginTop:4,display:"inline-block",background:T.orangeLt,borderRadius:6,padding:"2px 8px",fontSize:12,color:T.orange,fontWeight:700}}>มูลค่า ฿{fmt(itemVal)}</div>}
-            </div>
-            <div style={{textAlign:"right",marginLeft:10}}><div style={{color:ST_C[st],fontWeight:900,fontSize:26}}>{item.qty}</div><div style={{color:T.textSm,fontSize:13}}>{item.unit}</div></div>
-          </div>
-          )}
-          {editId===item.id?(
-            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${T.bg}`}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                {[["ชื่อ","name","text"],["หน่วย","unit","text"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
-                  <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
-                ))}
-                {canPrice&&<div style={{gridColumn:"1/-1",background:T.orangeLt,borderRadius:10,padding:"10px 12px"}}>
-                  <div style={{color:T.orange,fontWeight:700,fontSize:12,marginBottom:6}}>💰 อัปเดตราคาต้นทุน</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div>
-                      <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>WAC ปัจจุบัน</div>
-                      <div style={{fontWeight:800,fontSize:16,color:T.orange}}>{wac(item)>0?`฿${wac(item).toFixed(2)}`:"ยังไม่มีราคา"}</div>
-                      <div style={{color:T.textXs,fontSize:10}}>/{editData.unit??item.unit}</div>
-                    </div>
-                    <div>
-                      <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>ราคาใหม่/หน่วย <span style={{color:T.textXs}}>(ไม่บังคับ)</span></div>
-                      <input type="number" value={editData.newCost||""} onChange={e=>setEditData(p=>({...p,newCost:e.target.value}))} style={{...S.inp,fontSize:15,borderColor:T.orange}} placeholder="0" />
-                    </div>
+        {filtered.map(item=>{
+          const st=stockSt(item);
+          const sup=suppliers?.find(x=>x.id===item.supplierId);
+          const isOwner=user.role==="owner";
+          const itemVal=wac(item)*item.qty;
+          const vola=costVolatility(item);
+          const trend=costTrend(item);
+          const isHighCost=trend>15;
+          const isVolatile=vola>20;
+          return(
+          <Card key={item.id} style={{borderColor:st!=="ok"?ST_C[st]+"44":isHighCost||isVolatile?T.yellow+"66":T.border}}>
+            {/* COMPACT VIEW */}
+            {compact?(
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+                <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"nowrap"}}>
+                    <span style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:170}}>{item.name}</span>
+                    <Badge status={st} />
+                    {item.category&&<span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"0 5px",fontSize:10,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{item.category}</span>}
                   </div>
-                  {editData.newCost&&+editData.newCost>0&&wac(item)>0&&(()=>{const diff=(+editData.newCost-wac(item))/wac(item)*100;return<div style={{marginTop:6,fontSize:11,color:diff>10?T.red:diff<-5?T.green:T.yellow,fontWeight:600}}>{diff>0?`▲ สูงกว่า WAC ${diff.toFixed(1)}%`:`▼ ต่ำกว่า WAC ${Math.abs(diff).toFixed(1)}%`}</div>})()}
-                  <div style={{color:T.textXs,fontSize:10,marginTop:4}}>* กรอกราคาใหม่แล้วระบบจะเพิ่มเป็น costHistory โดยอ้างอิงจากจำนวนปัจจุบัน</div>
-                </div>}
-                <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>หมวด (Category)</div>
-                  <select value={editData.category??item.category??""} onChange={e=>setEditData(p=>({...p,category:e.target.value}))} style={{...S.inp,height:40}}>
-                    <option value="">— เลือกหมวด —</option>
-                    {STOCK_CATS.map(c=><option key={c}>{c}</option>)}
-                  </select>
+                  <div style={{color:T.textXs,fontSize:10,marginTop:1}}>
+                    ขั้นต่ำ {item.minQty}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}
+                    {isHighCost&&canPrice&&<span style={{color:T.red}}> 📈</span>}
+                    {isVolatile&&canPrice&&<span style={{color:T.yellow}}> ⚡</span>}
+                  </div>
                 </div>
-                <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>ซัพพลายเออร์</div>
-                  <select value={editData.supplierId??item.supplierId} onChange={e=>setEditData(p=>({...p,supplierId:+e.target.value}))} style={{...S.inp,height:40}}>
-                    {suppliers.map(s=><option key={s.id} value={s.id}>{user.role==="owner"?`${s.name} (ซัพ ${SUP_CODES[s._codeIndex??0]||"?"})`:supDisplay(s,false)}</option>)}
-                  </select>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{color:ST_C[st],fontWeight:900,fontSize:18}}>{item.qty} <span style={{fontSize:11,color:T.textSm,fontWeight:400}}>{item.unit}</span></div>
+                  {canPrice&&itemVal>0&&<div style={{color:T.orange,fontSize:10,fontWeight:700}}>฿{fmt(itemVal)}</div>}
                 </div>
               </div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>{
-                  const uc=canPrice&&editData.newCost&&+editData.newCost>0?+editData.newCost:0;
-                  const curQty=+(editData.qty??item.qty)||item.qty;
-                  // เพิ่ม costHistory ถ้ามีราคาใหม่
-                  const newHistory=uc>0
-                    ?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:curQty,total:uc*curQty}]
-                    :item.costHistory||[];
-                  const updated={...item,...editData,
-                    minQty:+editData.minQty||item.minQty,
-                    dailyUse:+editData.dailyUse||item.dailyUse,
-                    supplierId:editData.supplierId||item.supplierId,
-                    category:editData.category??item.category,
-                    costHistory:newHistory
-                  };
-                  saveAndSync(stock.map(s=>s.id===item.id?updated:s));
-                  setEditId(null);setEditData({});
-                }} style={{...S.btn(),flex:1}}>บันทึก</button>
-                <button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button>
+            ):(
+            /* FULL VIEW */
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontWeight:700,fontSize:16}}>{item.name}</span>
+                  <Badge status={st} />
+                  {item.category&&<span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:600}}>{item.category}</span>}
+                  {isHighCost&&canPrice&&<span style={{background:T.redLt,color:T.red,borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:700}}>📈 ต้นทุนสูง +{trend.toFixed(0)}%</span>}
+                  {isVolatile&&canPrice&&<span style={{background:T.yellowLt,color:T.yellow,borderRadius:6,padding:"1px 7px",fontSize:11,fontWeight:700}}>⚡ ผันผวน {vola.toFixed(0)}%</span>}
+                </div>
+                <div style={{color:T.textSm,fontSize:13,marginTop:3}}>ซัพฯ: {supDisplay(sup,isOwner)} • ใช้/วัน {item.dailyUse}{canPrice&&wac(item)>0?` • ฿${wac(item).toFixed(2)}/${item.unit}`:""}</div>
+                <div style={{color:T.textXs,fontSize:12,marginTop:2}}>ขั้นต่ำ {item.minQty} • เหลือ {item.dailyUse>0?(item.qty/item.dailyUse).toFixed(1):"∞"} วัน</div>
+                {canPrice&&itemVal>0&&<div style={{marginTop:4,display:"inline-block",background:T.orangeLt,borderRadius:6,padding:"2px 8px",fontSize:12,color:T.orange,fontWeight:700}}>มูลค่า ฿{fmt(itemVal)}</div>}
               </div>
+              <div style={{textAlign:"right",marginLeft:10}}><div style={{color:ST_C[st],fontWeight:900,fontSize:26}}>{item.qty}</div><div style={{color:T.textSm,fontSize:13}}>{item.unit}</div></div>
             </div>
-          ):(
-            <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
-              <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse,category:item.category||"",supplierId:item.supplierId,newCost:""});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
-              <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))saveAndSync(stock.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
-            </div>
-          )}
-        </Card>);
+            )}
+            {/* EDIT FORM */}
+            {editId===item.id?(
+              <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${T.bg}`}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  {[["ชื่อ","name","text"],["หน่วย","unit","text"],["ขั้นต่ำ","minQty","number"],["ใช้/วัน","dailyUse","number"]].map(([l,k,t])=>(
+                    <div key={k}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>{l}</div><input type={t} value={editData[k]??item[k]} onChange={e=>setEditData(p=>({...p,[k]:e.target.value}))} style={S.inp} /></div>
+                  ))}
+                  {canPrice&&<div style={{gridColumn:"1/-1",background:T.orangeLt,borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{color:T.orange,fontWeight:700,fontSize:12,marginBottom:6}}>💰 อัปเดตราคาต้นทุน</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <div>
+                        <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>WAC ปัจจุบัน</div>
+                        <div style={{fontWeight:800,fontSize:16,color:T.orange}}>{wac(item)>0?`฿${wac(item).toFixed(2)}`:"ยังไม่มีราคา"}</div>
+                        <div style={{color:T.textXs,fontSize:10}}>/{editData.unit??item.unit}</div>
+                      </div>
+                      <div>
+                        <div style={{color:T.textSm,fontSize:11,marginBottom:3}}>ราคาใหม่/หน่วย <span style={{color:T.textXs}}>(ไม่บังคับ)</span></div>
+                        <input type="number" value={editData.newCost||""} onChange={e=>setEditData(p=>({...p,newCost:e.target.value}))} style={{...S.inp,fontSize:15,borderColor:T.orange}} placeholder="0" />
+                      </div>
+                    </div>
+                    {editData.newCost&&+editData.newCost>0&&wac(item)>0&&(()=>{const diff=(+editData.newCost-wac(item))/wac(item)*100;return<div style={{marginTop:6,fontSize:11,color:diff>10?T.red:diff<-5?T.green:T.yellow,fontWeight:600}}>{diff>0?`▲ สูงกว่า WAC ${diff.toFixed(1)}%`:`▼ ต่ำกว่า WAC ${Math.abs(diff).toFixed(1)}%`}</div>})()}
+                    <div style={{color:T.textXs,fontSize:10,marginTop:4}}>* กรอกราคาใหม่แล้วระบบจะเพิ่มเป็น costHistory</div>
+                  </div>}
+                  <div><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>หมวด (Category)</div>
+                    <select value={editData.category??item.category??""} onChange={e=>setEditData(p=>({...p,category:e.target.value}))} style={{...S.inp,height:40}}>
+                      <option value="">— เลือกหมวด —</option>
+                      {STOCK_CATS.map(c=><option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div style={{gridColumn:"1/-1"}}><div style={{color:T.textSm,fontSize:12,marginBottom:3}}>ซัพพลายเออร์</div>
+                    <select value={editData.supplierId??item.supplierId} onChange={e=>setEditData(p=>({...p,supplierId:+e.target.value}))} style={{...S.inp,height:40}}>
+                      {suppliers.map(s=><option key={s.id} value={s.id}>{user.role==="owner"?`${s.name} (ซัพ ${SUP_CODES[s._codeIndex??0]||"?"})`:supDisplay(s,false)}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{
+                    const uc=canPrice&&editData.newCost&&+editData.newCost>0?+editData.newCost:0;
+                    const curQty=+(editData.qty??item.qty)||item.qty;
+                    const newHistory=uc>0?[...(item.costHistory||[]),{date:today(),unitCost:uc,qty:curQty,total:uc*curQty}]:item.costHistory||[];
+                    const updated={...item,...editData,minQty:+editData.minQty||item.minQty,dailyUse:+editData.dailyUse||item.dailyUse,supplierId:editData.supplierId||item.supplierId,category:editData.category??item.category,costHistory:newHistory};
+                    saveAndSync(stock.map(s=>s.id===item.id?updated:s));
+                    setEditId(null);setEditData({});
+                  }} style={{...S.btn(),flex:1}}>บันทึก</button>
+                  <button onClick={()=>{setEditId(null);setEditData({});}} style={S.ghost}>ยกเลิก</button>
+                </div>
+              </div>
+            ):(
+              <div style={{borderTop:`1px solid ${T.bg}`,marginTop:8,paddingTop:7,display:"flex",justifyContent:"space-between"}}>
+                <button onClick={()=>{setEditId(item.id);setEditData({name:item.name,unit:item.unit,minQty:item.minQty,dailyUse:item.dailyUse,category:item.category||"",supplierId:item.supplierId,newCost:""});}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontSize:12,fontWeight:600}}>✏️ แก้ไข</button>
+                <button onClick={()=>{if(window.confirm(`ลบ "${item.name}"?`))saveAndSync(stock.filter(s=>s.id!==item.id));}} style={{background:"none",border:"none",color:T.textXs,cursor:"pointer",fontSize:12}}>🗑 ลบ</button>
+              </div>
+            )}
+          </Card>);
       })}
       </div>);
     })()}
