@@ -585,13 +585,32 @@ function StaffStockPage({stock,setStock,movements,setMovements,user}){
   );
 }
 
-function PurchasePage({stock,suppliers,lineToken,user}){
+function PurchasePage({stock,suppliers,lineToken,lineUserId,lineGroupId,user}){
   const[sel,setSel]=useState({});const[oQty,setOQty]=useState({});const[note,setNote]=useState("");const[sent,setSent]=useState(false);const[sending,setSending]=useState(false);const[prev,setPrev]=useState(false);
   const need=stock.filter(s=>s.qty<s.minQty);
   const tog=id=>{setSel(p=>({...p,[id]:!p[id]}));if(!oQty[id]){const it=stock.find(s=>s.id===id);if(it)setOQty(p=>({...p,[id]:String(Math.max(it.minQty*2-it.qty,1))}));}};
   const selItems=stock.filter(s=>sel[s.id]);
   const buildMsg=()=>{const lines=["🛒 ใบสั่งซื้อ",`📅 ${today()}`,"─────────"];const bySup={};selItems.forEach(it=>{const supObj=suppliers.find(x=>x.id===it.supplierId);const sn=supDisplay(supObj,true)||"ไม่ระบุ";if(!bySup[sn])bySup[sn]=[];bySup[sn].push(it);});Object.entries(bySup).forEach(([sn,items])=>{lines.push(`\n🏪 ${sn}`);items.forEach(it=>lines.push(`  • ${it.name}: ${oQty[it.id]||it.minQty} ${it.unit} (มี ${it.qty})`));});if(note)lines.push(`\n📝 ${note}`);lines.push("\n─────────\nไท่กั๋วหม่าล่า");return lines.join("\n");};
-  const send=async()=>{if(!lineToken){alert("ตั้งค่า LINE Token ก่อน");return;}if(!selItems.length){alert("เลือกรายการก่อน");return;}setSending(true);try{const r=await fetch("https://notify-api.line.me/api/notify",{method:"POST",headers:{"Authorization":`Bearer ${lineToken}`,"Content-Type":"application/x-www-form-urlencoded"},body:`message=${encodeURIComponent(buildMsg())}`});if(r.ok){setSent(true);setTimeout(()=>setSent(false),5000);}else alert("ส่งไม่สำเร็จ");}catch{alert("ผิดพลาด");}setSending(false);};
+  const sendToLine=async(toId)=>{
+    const body={to:toId,messages:[{type:"text",text:buildMsg()}]};
+    const r=await fetch("https://api.line.me/v2/bot/message/push",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${lineToken}`},body:JSON.stringify(body)});
+    return r.ok;
+  };
+  const send=async()=>{
+    if(!lineToken){alert("ตั้งค่า Channel Access Token ใน Settings → LINE ก่อน");return;}
+    if(!lineUserId&&!lineGroupId){alert("ตั้งค่า User ID หรือ Group ID ใน Settings → LINE ก่อน");return;}
+    if(!selItems.length){alert("เลือกรายการก่อน");return;}
+    setSending(true);
+    try{
+      const results=await Promise.all([
+        lineUserId?sendToLine(lineUserId):Promise.resolve(true),
+        lineGroupId?sendToLine(lineGroupId):Promise.resolve(true),
+      ]);
+      if(results.some(r=>r)){setSent(true);setTimeout(()=>setSent(false),5000);}
+      else alert("ส่งไม่สำเร็จ — ตรวจสอบ Token และ ID อีกครั้ง");
+    }catch{alert("เกิดข้อผิดพลาด");}
+    setSending(false);
+  };
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Hdr title="🛒 สั่งซื้อวัตถุดิบ" />
@@ -623,7 +642,8 @@ function PurchasePage({stock,suppliers,lineToken,user}){
       <div><div style={{color:T.textSm,fontSize:13,marginBottom:5}}>หมายเหตุ</div><input value={note} onChange={e=>setNote(e.target.value)} style={S.inp} placeholder="เช่น ส่งด่วนก่อน 8 โมง" /></div>
       {selItems.length>0&&<button onClick={()=>setPrev(!prev)} style={{...S.ghost,width:"100%",padding:10,fontSize:13}}>{prev?"▲ ซ่อน":"▼ ดูตัวอย่าง"} ({selItems.length})</button>}
       {prev&&<Card style={{background:"#1a1a2e"}}><pre style={{color:"#e2e8f0",fontSize:12,whiteSpace:"pre-wrap",margin:0,lineHeight:1.7}}>{buildMsg()}</pre></Card>}
-      {!lineToken&&<div style={{background:T.yellowLt,borderRadius:8,padding:"9px 14px",fontSize:13,color:T.yellow,fontWeight:600}}>⚠️ ตั้งค่า LINE Token ใน Settings → LINE ก่อน</div>}
+      {!lineToken&&<div style={{background:T.yellowLt,borderRadius:8,padding:"9px 14px",fontSize:13,color:T.yellow,fontWeight:600}}>⚠️ ตั้งค่า Channel Access Token ใน Settings → LINE ก่อน</div>}
+      {lineToken&&!lineUserId&&!lineGroupId&&<div style={{background:T.yellowLt,borderRadius:8,padding:"9px 14px",fontSize:13,color:T.yellow,fontWeight:600}}>⚠️ ตั้งค่า User ID หรือ Group ID ใน Settings → LINE ก่อน</div>}
       <button onClick={send} disabled={sending||!selItems.length} style={{...S.btn(!selItems.length?"#a1a1aa":T.green),width:"100%",padding:14,fontSize:16,opacity:!selItems.length?0.5:1}}>{sending?"⏳ กำลังส่ง...":`📲 ส่ง LINE (${selItems.length} รายการ)`}</button>
     </div>
   );
@@ -1131,7 +1151,7 @@ function HRPage({staff,setStaff,attendance,setAttendance,cf,shopLat,shopLng,dbRe
   );
 }
 
-function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixedCosts,suppliers,setSuppliers,shopLat,setShopLat,shopLng,setShopLng,shopRadius,setShopRadius,dbReady}){
+function SettingsPage({staff,setStaff,lineToken,setLineToken,lineUserId,setLineUserId,lineGroupId,setLineGroupId,fixedCosts,setFixedCosts,suppliers,setSuppliers,shopLat,setShopLat,shopLng,setShopLng,shopRadius,setShopRadius,dbReady}){
   const[syncMsg,setSyncMsg]=useState("");
   const[syncing,setSyncing]=useState(false);
   const manualSync=async()=>{setSyncing(true);setSyncMsg("");try{await Promise.all([db.upsertSetting("staff",staff),db.upsertSetting("suppliers",suppliers),db.upsertSetting("fixedCosts",fixedCosts),db.upsertSetting("lineToken",lineToken),db.upsertSetting("shopLat",shopLat),db.upsertSetting("shopLng",shopLng),db.upsertSetting("shopRadius",shopRadius)].map(p=>p.catch(()=>{})));setSyncMsg("ok");}catch{setSyncMsg("err");}setSyncing(false);setTimeout(()=>setSyncMsg(""),3000);};
@@ -1229,12 +1249,39 @@ function SettingsPage({staff,setStaff,lineToken,setLineToken,fixedCosts,setFixed
           </div>
         </Card>
       </div>}
-      {tab==="line"&&<Card>
-        <div style={{color:T.orange,fontWeight:800,fontSize:16,marginBottom:12}}>📲 LINE Notify Token</div>
-        <div style={{color:T.textSm,fontSize:13,marginBottom:8}}>รับ Token จาก notify-bot.line.me</div>
-        <input type="password" value={lineToken} onChange={e=>setLineToken(e.target.value)} style={S.inp} placeholder="ใส่ Token ที่นี่..." />
-        {lineToken&&<div style={{color:T.green,fontSize:13,marginTop:6,fontWeight:600}}>✅ Token บันทึกแล้ว</div>}
-      </Card>}
+      {tab==="line"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <Card style={{borderColor:"#06b6d4",background:"#ecfeff"}}>
+          <div style={{color:"#0891b2",fontWeight:800,fontSize:15,marginBottom:8}}>📲 LINE Messaging API</div>
+          <div style={{color:T.textSm,fontSize:12,marginBottom:12,lineHeight:1.6}}>
+            ใช้ LINE Messaging API แทน LINE Notify (ปิดบริการแล้ว)<br/>
+            ตั้งค่าที่ <b>developers.line.biz</b> → สร้าง Messaging API channel
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div>
+              <div style={{color:T.textSm,fontSize:13,marginBottom:4}}>🔑 Channel Access Token</div>
+              <input type="password" value={lineToken} onChange={e=>setLineToken(e.target.value)} style={S.inp} placeholder="Channel access token จาก LINE Developers..." />
+              {lineToken&&<div style={{color:T.green,fontSize:12,marginTop:4,fontWeight:600}}>✅ Token บันทึกแล้ว</div>}
+            </div>
+            <div>
+              <div style={{color:T.textSm,fontSize:13,marginBottom:4}}>👤 User ID (แจ้งเตือนส่วนตัว)</div>
+              <input value={lineUserId} onChange={e=>setLineUserId(e.target.value)} style={S.inp} placeholder="U xxxxxxxx (Basic settings → Your user ID)" />
+              {lineUserId&&<div style={{color:T.green,fontSize:12,marginTop:4,fontWeight:600}}>✅ User ID บันทึกแล้ว</div>}
+            </div>
+            <div>
+              <div style={{color:T.textSm,fontSize:13,marginBottom:4}}>👥 Group ID (แจ้งเตือนกลุ่ม)</div>
+              <input value={lineGroupId} onChange={e=>setLineGroupId(e.target.value)} style={S.inp} placeholder="C xxxxxxxx (รับจาก Webhook เมื่อเพิ่ม Bot เข้ากลุ่ม)" />
+              {lineGroupId&&<div style={{color:T.green,fontSize:12,marginTop:4,fontWeight:600}}>✅ Group ID บันทึกแล้ว</div>}
+            </div>
+          </div>
+          <div style={{marginTop:12,background:"#fff",borderRadius:8,padding:"10px 12px",fontSize:12,color:T.textSm,lineHeight:1.8}}>
+            <b>วิธีตั้งค่า:</b><br/>
+            1. ไป developers.line.biz → สร้าง Messaging API channel<br/>
+            2. แท็บ Messaging API → Issue <b>Channel access token</b><br/>
+            3. แท็บ Basic settings → copy <b>Your user ID</b><br/>
+            4. เพิ่ม Bot เข้ากลุ่ม LINE ร้าน → รับ <b>Group ID</b> จาก Webhook
+          </div>
+        </Card>
+      </div>}
     </div>
   );
 }
@@ -1248,6 +1295,8 @@ export default function App(){
   const[suppliers,setSuppliers]=useState(()=>lsGet("tg_sups",INIT_SUPS));
   const[fixedCosts,setFixedCosts]=useState(()=>lsGet("tg_fixed",INIT_FIXED));
   const[lineToken,setLineToken]=useState(()=>lsGet("tg_line",""));
+  const[lineUserId,setLineUserId]=useState(()=>lsGet("tg_line_uid",""));
+  const[lineGroupId,setLineGroupId]=useState(()=>lsGet("tg_line_gid",""));
   const[waste,setWaste]=useState(()=>lsGet("tg_waste",[]));
   const[promos,setPromos]=useState(()=>lsGet("tg_promos",[]));
   const[attendance,setAttendance]=useState(()=>lsGet("tg_att",[]));
@@ -1366,6 +1415,8 @@ export default function App(){
   useEffect(()=>{lsSet("tg_sups",suppliers);if(dbReady)db.upsertSetting("suppliers",suppliers).catch(()=>{});},[suppliers,dbReady]);
   useEffect(()=>{lsSet("tg_fixed",fixedCosts);if(dbReady)db.upsertSetting("fixedCosts",fixedCosts).catch(()=>{});},[fixedCosts,dbReady]);
   useEffect(()=>{lsSet("tg_line",lineToken);if(dbReady)db.upsertSetting("lineToken",lineToken).catch(()=>{});},[lineToken,dbReady]);
+  useEffect(()=>{lsSet("tg_line_uid",lineUserId);},[lineUserId]);
+  useEffect(()=>{lsSet("tg_line_gid",lineGroupId);},[lineGroupId]);
   useEffect(()=>lsSet("tg_waste",waste),[waste]);
   useEffect(()=>lsSet("tg_promos",promos),[promos]);
   useEffect(()=>lsSet("tg_att",attendance),[attendance]);
@@ -1422,10 +1473,10 @@ export default function App(){
     cashflow:<CashflowPage cf={cf} setCF={setCF} user={user} dbReady={dbReady} />,
     stock:<StockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} suppliers={suppliers} dbReady={dbReady} />,
     staffstock:<StaffStockPage stock={stock} setStock={saveStock} movements={movements} setMovements={setMovements} user={user} />,
-    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} user={user} />,
+    purchase:<PurchasePage stock={stock} suppliers={suppliers} lineToken={lineToken} lineUserId={lineUserId} lineGroupId={lineGroupId} user={user} />,
     report:<ReportPage cf={cf} stock={stock} movements={movements} user={user} fixedCosts={fixedCosts} waste={waste} setWaste={setWaste} promos={promos} setPromos={setPromos} dbReady={dbReady} />,
     hr:<HRPage staff={staff} setStaff={setStaff} attendance={attendance} setAttendance={setAttendance} cf={cf} shopLat={shopLat} shopLng={shopLng} dbReady={dbReady} />,
-    settings:<SettingsPage staff={staff} setStaff={setStaff} lineToken={lineToken} setLineToken={setLineToken} fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} suppliers={suppliers} setSuppliers={setSuppliers} shopLat={shopLat} setShopLat={setShopLat} shopLng={shopLng} setShopLng={setShopLng} shopRadius={shopRadius} setShopRadius={setShopRadius} dbReady={dbReady} />,
+    settings:<SettingsPage staff={staff} setStaff={setStaff} lineToken={lineToken} setLineToken={setLineToken} lineUserId={lineUserId} setLineUserId={setLineUserId} lineGroupId={lineGroupId} setLineGroupId={setLineGroupId} fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} suppliers={suppliers} setSuppliers={setSuppliers} shopLat={shopLat} setShopLat={setShopLat} shopLng={shopLng} setShopLng={setShopLng} shopRadius={shopRadius} setShopRadius={setShopRadius} dbReady={dbReady} />,
   };
 
   return(
